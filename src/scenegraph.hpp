@@ -1,50 +1,77 @@
 #pragma once
 
-#include <vector>
-#include <glad/glad.h>
 #include <glm/glm.hpp>
-#include "utils/mesh.hpp"
+#include <glm/mat4x4.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
-class SceneNode {
-protected:
-    glm::mat4 modelTF;
-    glm::vec3 referencePoint;
-public:
-    glm::vec3 position;
-    glm::vec3 rotation;
-    glm::vec3 scale = {1,1,1};
-    std::vector<SceneNode*> children;
+#include <stack>
+#include <vector>
+#include <cstdio>
+#include <cstdlib> 
+#include <ctime> 
+#include <chrono>
+#include <fstream>
 
-    virtual void render();
-
-    virtual void updateTFs(glm::mat4 cumulative_tf);
+enum SceneNodeType {
+	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, FLAT_GEOMETRY, NORMAL_MAPPED_GEOMETRY, FUR_GEOMETRY
 };
 
+struct SceneNode {
+	SceneNode() {
+		position = glm::vec3(0, 0, 0);
+		rotation = glm::vec3(0, 0, 0);
+		scale = glm::vec3(1, 1, 1);
 
-class DrawableNode : public SceneNode {
-public:
-    GLuint vao;
-    GLsizei vao_index_count;
+        referencePoint = glm::vec3(0, 0, 0);
+        vertexArrayObjectID = -1;
+        VAOIndexCount = 0;
 
-    void render() override;
-};
+        lightID = -1;
+        textureID = -1;
+        normalMapID = -1;
+        roughnessID = -1;
+        furID = -1;
+        lightColor = glm::vec3(0.6, 0.6, 0.6);
 
-class GeometryNode : public DrawableNode {
-public:
-    void render() override;
-    void register_vao(const Mesh &mesh);
-};
+        nodeType = GEOMETRY;
 
-class LightNode : public SceneNode {
-    unsigned lightID;
+	}
+
+	// A list of all children that belong to this node.
+	// For instance, in case of the scene graph of a human body shown in the assignment text, the "Upper Torso" node would contain the "Left Arm", "Right Arm", "Head" and "Lower Torso" nodes in its list of children.
+	std::vector<SceneNode*> children;
+	
+	// The node's position and rotation relative to its parent
+	glm::vec3 position;
+	glm::vec3 rotation;
+	glm::vec3 scale;
+
+	// A transformation matrix representing the transformation of the node's location relative to its parent. This matrix is updated every frame.
+	glm::mat4 modelTF;
+
+	// The location of the node's reference point
+	glm::vec3 referencePoint;
+
+	// The ID of the VAO containing the "appearance" of this SceneNode.
+	int vertexArrayObjectID;
+	unsigned int VAOIndexCount;
+
+    // index in light arrays, if nodeType is POINT_LIGHT / SPOT_LIGHT.
+    int lightID;
     glm::vec3 lightColor;
+
+    int textureID;
+    int roughnessID;
+    int normalMapID;
+    int furID;
+
+	// Node type is used to determine how to handle the contents of a node
+	SceneNodeType nodeType;
 };
 
-class DirLightNode : public LightNode {
-    glm::vec3 direction;
-};
+SceneNode* createSceneNode();
+void addChild(SceneNode* parent, SceneNode* child);
+void printNode(SceneNode* node);
+int totalChildren(SceneNode* parent);
 
-class PointLightNode : public LightNode {
-    glm::vec3 location;
-    void updateTFs(glm::mat4 cumulative_tf) override;
-};
+// For more details, see SceneGraph.cpp.

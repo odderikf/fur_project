@@ -1,13 +1,20 @@
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
-
-#include "game_logic.hpp"
+#include "gamelogic.h"
 
 
 void handle_poll_events(GLFWwindow *window){
 
 }
 
+void handleKeyboardInput(GLFWwindow* window)
+{
+    // Use escape key for terminating the GLFW window
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
+        glfwSetWindowShouldClose(window, GL_TRUE);
+    }
+}
 
 void run_game(GLFWwindow* window){
 
@@ -21,9 +28,10 @@ void run_game(GLFWwindow* window){
         glfwPollEvents();
         handle_poll_events(window);
 
-        update(window);
-        render(window);
+        updateFrame(window);
+        renderFrame(window);
 
+        handleKeyboardInput(window);
         // Flip buffers
         glfwSwapBuffers(window);
     }

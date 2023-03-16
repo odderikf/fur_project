@@ -1,7 +1,6 @@
 #include <iostream>
-
-#include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glad/glad.h>
 
 #include "window.hpp"
 #include "game.hpp"
@@ -54,12 +53,13 @@ void initialize_gl_settings() {
     glClearColor(0.3f, 0.5f, 0.8f, 1.0f); //todo ?
 }
 
-int main() {
+int main()
+{
     GLFWwindow* window = initialize_window();
     initialize_gl_settings();
     run_game(window);
 
-    glfwDestroyWindow(window);
+    // Terminate GLFW (no need to call glfwDestroyWindow)
     glfwTerminate();
     return EXIT_SUCCESS;
 }
