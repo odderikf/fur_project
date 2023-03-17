@@ -38,9 +38,9 @@ add_definitions(-DGLFW_INCLUDE_NONE)
 target_link_libraries(${PROJECT_NAME} glfw)
 
 #glad
-include_directories(lib/glad/include)
+include_directories(lib/glad_gen/include)
 add_subdirectory(lib/glad/cmake)
-target_sources(${PROJECT_NAME} PRIVATE lib/glad/src/glad.c)
+target_sources(${PROJECT_NAME} PRIVATE lib/glad_gen/src/glad.c)
 
 #glm
 include_directories(lib/glm/)
