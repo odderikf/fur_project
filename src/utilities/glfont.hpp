@@ -1,6 +1,6 @@
 #pragma once
 
 #include <string>
-#include "mesh.h"
+#include "mesh.hpp"
 
 Mesh generateTextGeometryBuffer(std::string text, float characterHeightOverWidth, float totalTextWidth);

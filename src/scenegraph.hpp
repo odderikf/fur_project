@@ -1,16 +1,8 @@
 #pragma once
 
 #include <glm/glm.hpp>
-#include <glm/mat4x4.hpp>
-#include <glm/gtc/type_ptr.hpp>
 
-#include <stack>
 #include <vector>
-#include <cstdio>
-#include <cstdlib> 
-#include <ctime> 
-#include <chrono>
-#include <fstream>
 
 enum SceneNodeType {
 	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, FLAT_GEOMETRY, NORMAL_MAPPED_GEOMETRY, FUR_GEOMETRY

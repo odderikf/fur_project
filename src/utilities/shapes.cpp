@@ -1,5 +1,5 @@
 #include <iostream>
-#include "shapes.h"
+#include "shapes.hpp"
 
 #ifndef M_PI
 #define M_PI 3.14159265359f

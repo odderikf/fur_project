@@ -1,29 +1,23 @@
 #include <chrono>
 #include <GLFW/glfw3.h>
 #include <glad/glad.h>
-#include <glm/vec3.hpp>
 #include <iostream>
-
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <fmt/format.h>
-#include "gamelogic.h"
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
+
+#include <glm/gtc/type_ptr.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/transform.hpp>
 
 #include "utilities/imageLoader.hpp"
-#include "utilities/glfont.h"
+#include "utilities/glfont.hpp"
 #include "utilities/timeutils.h"
-#include "utilities/shapes.h"
-#include "utilities/glutils.h"
+#include "utilities/shapes.hpp"
+#include "utilities/glutils.hpp"
 #include "utilities/shader.hpp"
 
-
+#include "gamelogic.h"
 #include "shader_uniform_defines.hpp"
 #include "window.hpp"
-
 
 double padPositionX = 0;
 double padPositionZ = 0;
@@ -108,48 +102,6 @@ GLuint create_texture(GLsizei width, GLsizei height,  std::vector<unsigned char>
     return tex_id;
 }
 
-Mesh loadObj(std::string filename){
-    tinyobj::attrib_t attributes;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string error;
-    std::string warning;
-    tinyobj::LoadObj(&attributes, &shapes, &materials, &warning, &error, filename.c_str(), nullptr, false);
-
-    Mesh m;
-    if (shapes.size() > 1){
-        std::cerr << "Unsupported obj format: more than one mesh in file" << std::endl;
-        return m;
-    }
-    if (shapes.size() == 0){
-        std::cerr << error << std::endl;
-        return m;
-    }
-    const auto &shape = shapes.front();
-    std::cout << "Loaded object " << shape.name << " from file " << filename << std::endl;
-    const auto &tmesh = shape.mesh;
-    for (const auto i : tmesh.indices){
-        m.indices.push_back(m.indices.size());
-        glm::vec3 pos;
-        pos.x = attributes.vertices.at(3*i.vertex_index);
-        pos.y = attributes.vertices.at(3*i.vertex_index+1);
-        pos.z = attributes.vertices.at(3*i.vertex_index+2);
-        m.vertices.push_back(pos);
-        glm::vec3 normal;
-        normal.x = attributes.normals.at(3*i.normal_index + 0);
-        normal.y = attributes.normals.at(3*i.normal_index + 1);
-        normal.z = attributes.normals.at(3*i.normal_index + 2);
-        m.normals.push_back(normal);
-        glm::vec2 uv;
-        uv.x = attributes.texcoords.at(2*i.texcoord_index + 0);
-        uv.y = attributes.texcoords.at(2*i.texcoord_index + 1);
-        m.textureCoordinates.push_back(uv);
-
-    }
-
-    return m;
-}
-
 void initialize_game(GLFWwindow* window) {
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
@@ -203,10 +155,10 @@ void initialize_game(GLFWwindow* window) {
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
     Mesh box = cube(boxDimensions, glm::vec2(90), true, true);
     Mesh sphere = generateSphere(1.0, 40, 40);
-    Mesh ricky = loadObj("../res/models/ricky.obj");
+    Mesh ricky("../res/models/ricky.obj");
 
     const float textwidth = 400;
-    const float textratio = 1.34482759;
+    const float textratio = 1.34482759f;
     Mesh text_mesh = generateTextGeometryBuffer("Click to start", textratio, textwidth);
 
 

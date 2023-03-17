@@ -1,5 +1,5 @@
 #include <iostream>
-#include "glfont.h"
+#include "glfont.hpp"
 
 Mesh generateTextGeometryBuffer(std::string text, float characterHeightOverWidth, float totalTextWidth) {
     float characterWidth = totalTextWidth / float(text.length());

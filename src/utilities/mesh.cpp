@@ -1,12 +1,7 @@
-//
-// Created by odder on 10/03/2023.
-//
-
+#include "mesh.hpp"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
-
-
-#include "mesh.hpp"
+#include <iostream>
 
 Mesh::Mesh(const std::string &filename) {
     tinyobj::attrib_t attributes;
@@ -43,7 +38,7 @@ Mesh::Mesh(const std::string &filename) {
         glm::vec2 uv;
         uv.x = attributes.texcoords.at(2*i.texcoord_index + 0);
         uv.y = attributes.texcoords.at(2*i.texcoord_index + 1);
-        uvs.push_back(uv);
+        textureCoordinates.push_back(uv);
 
     }
 }

@@ -1,5 +1,6 @@
+#include "glutils.hpp"
+
 #include <glad/glad.h>
-#include "glutils.h"
 #include <vector>
 
 template <class T>

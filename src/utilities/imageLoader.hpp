@@ -3,10 +3,11 @@
 #include <lodepng.h>
 #include <vector>
 #include <string>
+#include <glad/glad.h>
 
 typedef struct PNGImage {
-	unsigned int width;
-	unsigned int height;
+	GLsizei width;
+	GLsizei height;
 	std::vector<unsigned char> pixels;
 } PNGImage;
 

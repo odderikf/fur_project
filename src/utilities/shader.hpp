@@ -1,14 +1,7 @@
-#ifndef SHADER_HPP
-#define SHADER_HPP
 #pragma once
 
-// System headers
 #include <glad/glad.h>
-
-// Standard headers
-#include <cassert>
 #include <fstream>
-#include <memory>
 #include <string>
 
 
@@ -154,4 +147,3 @@ namespace Gloom
     };
 }
 
-#endif

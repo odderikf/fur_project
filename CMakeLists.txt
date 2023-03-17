@@ -7,7 +7,7 @@ include_directories (src/)
 add_executable(${PROJECT_NAME} src/main.cpp src/game.cpp
         src/gamelogic.cpp src/scenegraph.cpp
         src/utilities/timeutils.cpp src/utilities/glfont.cpp src/utilities/glutils.cpp
-        src/utilities/imageLoader.cpp src/utilities/shapes.cpp)
+        src/utilities/imageLoader.cpp src/utilities/shapes.cpp src/utilities/mesh.cpp)
 
 add_definitions (-DPROJECT_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\")
 
