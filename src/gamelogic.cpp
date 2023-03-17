@@ -23,6 +23,7 @@ double padPositionX = 0;
 double padPositionZ = 0;
 
 SceneNode* rootNode;
+SceneNode* terrainNode;
 SceneNode* boxNode;
 SceneNode* rickyNode;
 SceneNode* rickyFurNode;
@@ -42,6 +43,7 @@ double ballRadius = 3.0f;
 Gloom::Shader* lighting_shader;
 Gloom::Shader* flat_geometry_shader;
 Gloom::Shader* fur_shader;
+Gloom::Shader* skybox_shader;
 
 const glm::vec3 boxDimensions(180, 90, 90);
 const glm::vec3 padDimensions(30, 3, 40);
@@ -91,11 +93,30 @@ void mouseCallback(GLFWwindow* window, double x, double y) {
     glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 }
 
-GLuint create_texture(GLsizei width, GLsizei height,  std::vector<unsigned char> pixels) {
+GLuint create_cubemap(const std::string &foldername) {
+    GLuint tex_id = 0;
+    glGenTextures(1, &tex_id);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, tex_id);
+    std::string s[6] = {"posx.png", "negx.png", "posy.png", "negy.png", "posz.png", "negz.png"};
+    for (int i = 0; i < 6; ++i) {
+        auto tex = loadPNGFile(foldername + s[i]);
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, tex.width, tex.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex.pixels.data());
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return tex_id;
+}
+
+GLuint create_texture(const std::string &filename) {
+    auto tex = loadPNGFile(filename);
     GLuint tex_id = 0;
     glGenTextures(1, &tex_id);
     glBindTexture(GL_TEXTURE_2D, tex_id);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex.width, tex.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex.pixels.data());
     glGenerateMipmap(GL_TEXTURE_2D);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
@@ -122,40 +143,35 @@ void initialize_game(GLFWwindow* window) {
     fur_shader->link();
     fur_shader->activate();
 
-    // load textures
-    PNGImage charmap = loadPNGFile("../res/textures/charmap.png");
-
-    PNGImage paddle_normal_map    = loadPNGFile("../res/textures/paddle_nrm.png");
-    PNGImage paddle_diffuse_map   = loadPNGFile("../res/textures/paddle_col.png");
-    PNGImage paddle_roughness_map = loadPNGFile("../res/textures/paddle_rgh.png");
-
-    PNGImage ricky_normal_map    = loadPNGFile("../res/textures/ricky_nrm.png");
-    PNGImage ricky_fur_normal_map    = loadPNGFile("../res/textures/ricky_fur_nrm.png");
-    PNGImage ricky_diffuse_map   = loadPNGFile("../res/textures/ricky_col.png");
-    PNGImage ricky_roughness_map = loadPNGFile("../res/textures/ricky_rgh.png");
-    PNGImage ricky_fur_texture = loadPNGFile("../res/textures/ricky_fur.png");
-    PNGImage turbulence_texture = loadPNGFile("../res/textures/turbulence.png");
+    skybox_shader = new Gloom::Shader();
+    skybox_shader->attach("../res/shaders/skybox.vert");
+    skybox_shader->attach("../res/shaders/skybox.frag");
+    skybox_shader->link();
+    skybox_shader->activate();
 
     // create textures
-    GLuint charmap_id = create_texture(charmap.width, charmap.height, charmap.pixels);
+    GLuint charmap_id = create_texture("../res/textures/charmap.png");
 
-    GLuint paddle_normal_id    = create_texture(paddle_normal_map.width,    paddle_normal_map.height,    paddle_normal_map.pixels);
-    GLuint paddle_diffuse_id   = create_texture(paddle_diffuse_map.width,   paddle_diffuse_map.height,   paddle_diffuse_map.pixels);
-    GLuint paddle_roughness_id = create_texture(paddle_roughness_map.width, paddle_roughness_map.height, paddle_roughness_map.pixels);
+    GLuint paddle_normal_id    = create_texture("../res/textures/paddle_nrm.png");
+    GLuint paddle_diffuse_id   = create_texture("../res/textures/paddle_col.png");
+    GLuint paddle_roughness_id = create_texture("../res/textures/paddle_rgh.png");
 
-    GLuint ricky_normal_id    = create_texture(ricky_normal_map.width,    ricky_normal_map.height,    ricky_normal_map.pixels);
-    GLuint ricky_fur_normal_id    = create_texture(ricky_fur_normal_map.width,    ricky_fur_normal_map.height,    ricky_fur_normal_map.pixels);
-    GLuint ricky_diffuse_id   = create_texture(ricky_diffuse_map.width,   ricky_diffuse_map.height,   ricky_diffuse_map.pixels);
-    GLuint ricky_roughness_id = create_texture(ricky_roughness_map.width, ricky_roughness_map.height, ricky_roughness_map.pixels);
-    GLuint ricky_fur_texture_id = create_texture(ricky_fur_texture.width, ricky_fur_texture.height, ricky_fur_texture.pixels);
+    GLuint ricky_normal_id    = create_texture("../res/textures/ricky_nrm.png");
+    GLuint ricky_fur_normal_id    = create_texture("../res/textures/ricky_fur_nrm.png");
+    GLuint ricky_diffuse_id   = create_texture("../res/textures/ricky_col.png");
+    GLuint ricky_roughness_id = create_texture("../res/textures/ricky_rgh.png");
+    GLuint ricky_fur_texture_id = create_texture("../res/textures/ricky_fur.png");
 
-    GLuint turbulence_id = create_texture(turbulence_texture.width, turbulence_texture.height, turbulence_texture.pixels);
+    GLuint turbulence_id = create_texture("../res/textures/turbulence.png");
+
+    GLuint skybox_id = create_cubemap("../res/textures/skybox/");
 
     // gen meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
     Mesh box = cube(boxDimensions, glm::vec2(90), true, true);
     Mesh sphere = generateSphere(1.0, 40, 40);
     Mesh ricky("../res/models/ricky.obj");
+    Mesh terrain("../res/models/terrain.obj");
 
     const float textwidth = 400;
     const float textratio = 1.34482759f;
@@ -167,10 +183,12 @@ void initialize_game(GLFWwindow* window) {
     unsigned int padVAO  = generateBuffer(pad);
     unsigned int textVAO = generateBuffer(text_mesh);
     unsigned int rickyVAO = generateBuffer(ricky);
+    unsigned int terrainVAO = generateBuffer(terrain);
 
     // Construct scene
     rootNode = createSceneNode();
     boxNode  = createSceneNode();
+    terrainNode = createSceneNode();
     padNode  = createSceneNode();
     rickyNode = createSceneNode();
     rickyFurNode = createSceneNode();
@@ -183,6 +201,8 @@ void initialize_game(GLFWwindow* window) {
     whiteLightNode = createSceneNode();
     textNode = createSceneNode();
 
+//    rootNode->children.push_back(terrainNode);
+    rootNode->children.push_back(boxNode);
     rootNode->children.push_back(padNode);
     rootNode->children.push_back(rickyNode);
     rickyNode->children.push_back(rickyFurNode);
@@ -190,7 +210,7 @@ void initialize_game(GLFWwindow* window) {
     // transparency nodes
     rootNode->children.push_back(textNode);
 
-    int which_lights = 1;
+    int which_lights = 0;
 
     // these three groups of light are mutually incompatible
     if (which_lights == 0){
@@ -209,6 +229,8 @@ void initialize_game(GLFWwindow* window) {
     }
 
 
+    terrainNode->vertexArrayObjectID = terrainVAO;
+    terrainNode->VAOIndexCount = terrain.indices.size();
     boxNode->vertexArrayObjectID  = boxVAO;
     boxNode->VAOIndexCount        = box.indices.size();
 
@@ -235,7 +257,7 @@ void initialize_game(GLFWwindow* window) {
 
     textNode->nodeType = FLAT_GEOMETRY;
 
-    boxNode->nodeType = NORMAL_MAPPED_GEOMETRY;
+    boxNode->nodeType = SKYBOX;
     padNode->nodeType = NORMAL_MAPPED_GEOMETRY;
     rickyNode->nodeType = NORMAL_MAPPED_GEOMETRY;
     rickyFurNode->nodeType = FUR_GEOMETRY;
@@ -247,7 +269,7 @@ void initialize_game(GLFWwindow* window) {
 
     textNode->position = { DEFAULT_WINDOW_WIDTH/2 - textwidth/2, DEFAULT_WINDOW_HEIGHT/2, 0};
 
-    rickyNode->position = {-50, 0, -90};
+    rickyNode->position = {-50, 20, -90};
 
     // texture IDs
     textNode->textureID = charmap_id;
@@ -262,6 +284,7 @@ void initialize_game(GLFWwindow* window) {
     rickyFurNode->textureID = ricky_diffuse_id;
     rickyFurNode->roughnessID = ricky_roughness_id;
     turbulenceID = turbulence_id;
+    boxNode->textureID = skybox_id;
 
     // uniform array index IDs
     topLeftLightNode->lightID = 0;
@@ -332,12 +355,21 @@ void updateFrame(GLFWwindow* window) {
         mouseRightPressed = false;
     }
 
+//    glm::vec3 camera_position_delta = glm::vec3(0,0,0);
+//    glm::vec3 camera_rotation_delta = glm::vec3(0,0,0);
+//    float camera_move_speed = 5; // todo
+//    float delta_time = 0.1; // todo
+//    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+//    {
+//        camera_position_delta += camera_move_speed * delta_time;
+//    }
+
     realTime += timeDelta;
 
     glm::mat4 projection = glm::perspective(glm::radians(80.0f), float(DEFAULT_WINDOW_WIDTH) / float(DEFAULT_WINDOW_HEIGHT), 0.1f, 350.f);
 
-    // Some math to make the camera move in a nice way
     glm::vec3 cameraPosition = glm::vec3(0, 2, -20);
+//    glm::vec3 cameraRotation = glm::vec3(0, 0, 0); todo
     glm::mat4 cameraTransform = glm::translate(-cameraPosition);
 
     VP = projection * cameraTransform;
@@ -403,6 +435,7 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
         case FLAT_GEOMETRY: break;
         case NORMAL_MAPPED_GEOMETRY: break;
         case FUR_GEOMETRY: break;
+        case SKYBOX: break;
     }
 
     for(SceneNode* child : node->children) {
@@ -410,78 +443,95 @@ void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar)
     }
 }
 
-void renderNode(SceneNode* node) {
-
-    switch(node->nodeType) {
+void SceneNode::render() {
+    switch(nodeType) {
         case NORMAL_MAPPED_GEOMETRY:
-            if(node->vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP * node->modelTF;
-                glm::mat3 normal_matrix = glm::transpose(glm::inverse(node->modelTF));
+            if(vertexArrayObjectID != -1) {
+                glm::mat4 mvp = VP * modelTF;
+                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
                 lighting_shader->activate();
                 glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
                 glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(node->modelTF));
+                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
                 glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-                glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, node->normalMapID);
-                glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, node->textureID);
-                glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, node->roughnessID);
+                glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+                glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+                glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
 
-                glBindVertexArray(node->vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+                glBindVertexArray(vertexArrayObjectID);
+                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             }
             break;
 
     case FUR_GEOMETRY:
-        if(node->vertexArrayObjectID != -1) {
-            glm::mat4 mvp = VP * node->modelTF;
-            glm::mat3 normal_matrix = glm::transpose(glm::inverse(node->modelTF));
+        if(vertexArrayObjectID != -1) {
+            glm::mat4 mvp = VP * modelTF;
+            glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
             fur_shader->activate();
             glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-            glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(node->modelTF));
+            glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-            glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, node->textureID);
-            glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, node->normalMapID);
-            glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, node->roughnessID);
-            glBindTextureUnit(FUR_FUR_SAMPLER, node->furID);
+            glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+            glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+            glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
+            glBindTextureUnit(FUR_FUR_SAMPLER, furID);
             glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
 
-            glBindVertexArray(node->vertexArrayObjectID);
-            glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(vertexArrayObjectID);
+            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
         }
             break;
 
         case GEOMETRY:
-            if(node->vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP * node->modelTF;
-                glm::mat3 normal_matrix = glm::transpose(glm::inverse(node->modelTF));
+            if(vertexArrayObjectID != -1) {
+                glm::mat4 mvp = VP * modelTF;
+                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
                 lighting_shader->activate();
                 glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
                 glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(node->modelTF));
+                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
                 glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
-                glBindVertexArray(node->vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+                glBindVertexArray(vertexArrayObjectID);
+                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             }
             break;
         case POINT_LIGHT: break;
         case SPOT_LIGHT: break;
         case FLAT_GEOMETRY:
-            if(node->vertexArrayObjectID != -1) {
+            if(vertexArrayObjectID != -1) {
                 flat_geometry_shader->activate();
                 glm::mat4 ortho = glm::ortho(0.f, (float)DEFAULT_WINDOW_WIDTH, 0.f, (float)DEFAULT_WINDOW_HEIGHT, -1.f, 1.f);
-                ortho = ortho * node->modelTF;
+                ortho = ortho * modelTF;
                 glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(ortho));
 
-                glBindTextureUnit(TEX_TEXT_SAMPLER, node->textureID);
-                glBindVertexArray(node->vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, node->VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+                glBindTextureUnit(TEX_TEXT_SAMPLER, textureID);
+                glBindVertexArray(vertexArrayObjectID);
+                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            }
+            break;
+        case SKYBOX:
+            if(vertexArrayObjectID != -1) {
+                glm::mat4 mvp = VP * modelTF;
+                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+                skybox_shader->activate();
+                glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
+                glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+                glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+                glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+                glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+                glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
+                glBindTextureUnit(SKYBOX_CUBE_SAMPLER, textureID);
+
+                glBindVertexArray(vertexArrayObjectID);
+                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             }
             break;
     }
 
-    for(SceneNode* child : node->children) {
-        renderNode(child);
+    for(SceneNode* child : children) {
+        child->render();
     }
 }
 
@@ -490,5 +540,5 @@ void renderFrame(GLFWwindow* window) {
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
 
-    renderNode(rootNode);
+    rootNode->render();
 }

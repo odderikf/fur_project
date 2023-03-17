@@ -36,7 +36,7 @@ GLFWwindow* initialize_window(){
     return window;
 }
 
-void initialize_gl_settings() {
+void initialize_gl_settings(GLFWwindow *window) {
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
@@ -51,12 +51,14 @@ void initialize_gl_settings() {
 
     // Set default colour after clearing the colour buffer
     glClearColor(0.3f, 0.5f, 0.8f, 1.0f); //todo ?
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glfwSwapBuffers(window);
 }
 
 int main()
 {
     GLFWwindow* window = initialize_window();
-    initialize_gl_settings();
+    initialize_gl_settings(window);
     run_game(window);
 
     // Terminate GLFW (no need to call glfwDestroyWindow)

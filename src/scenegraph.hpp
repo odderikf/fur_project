@@ -5,10 +5,11 @@
 #include <vector>
 
 enum SceneNodeType {
-	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, FLAT_GEOMETRY, NORMAL_MAPPED_GEOMETRY, FUR_GEOMETRY
+	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, FLAT_GEOMETRY, NORMAL_MAPPED_GEOMETRY, FUR_GEOMETRY, SKYBOX
 };
 
-struct SceneNode {
+class SceneNode {
+public:
 	SceneNode() {
 		position = glm::vec3(0, 0, 0);
 		rotation = glm::vec3(0, 0, 0);
@@ -59,6 +60,8 @@ struct SceneNode {
 
 	// Node type is used to determine how to handle the contents of a node
 	SceneNodeType nodeType;
+
+    void render();
 };
 
 SceneNode* createSceneNode();
