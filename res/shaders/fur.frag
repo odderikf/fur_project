@@ -136,6 +136,6 @@ void main()
     intensity.r = min(1., intensity.r);
     intensity.g = min(1., intensity.g);
     intensity.b = min(1., intensity.b);
-    color.rgb = intensity * frag_color.xyz + reflective_intensity + dither(textureCoordinates);
+    color.rgb = intensity * frag_color.xyz + reflective_intensity;
 
 }

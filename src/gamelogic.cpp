@@ -45,7 +45,7 @@ Gloom::Shader* flat_geometry_shader;
 Gloom::Shader* fur_shader;
 Gloom::Shader* skybox_shader;
 
-const glm::vec3 boxDimensions(180, 90, 90);
+const glm::vec3 boxDimensions(1, 1, 1);
 const glm::vec3 padDimensions(30, 3, 40);
 
 // global so it can be multiplied in to make MVP locally
@@ -74,6 +74,10 @@ double realTime = debug_startTime;
 double mouseSensitivity = 1.0;
 double lastMouseX = DEFAULT_WINDOW_WIDTH / 2;
 double lastMouseY = DEFAULT_WINDOW_HEIGHT / 2;
+
+glm::vec3 cameraPosition = glm::vec3(0, 2, -20);
+glm::vec3 cameraRotation = glm::vec3(0, 0, 0);
+
 void mouseCallback(GLFWwindow* window, double x, double y) {
     int windowWidth, windowHeight;
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
@@ -97,7 +101,7 @@ GLuint create_cubemap(const std::string &foldername) {
     GLuint tex_id = 0;
     glGenTextures(1, &tex_id);
     glBindTexture(GL_TEXTURE_CUBE_MAP, tex_id);
-    std::string s[6] = {"posx.png", "negx.png", "posy.png", "negy.png", "posz.png", "negz.png"};
+    std::string s[6] = {"posx.png", "negx.png", "negy.png", "posy.png", "posz.png", "negz.png"};
     for (int i = 0; i < 6; ++i) {
         auto tex = loadPNGFile(foldername + s[i]);
         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, tex.width, tex.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex.pixels.data());
@@ -202,8 +206,8 @@ void initialize_game(GLFWwindow* window) {
     textNode = createSceneNode();
 
 //    rootNode->children.push_back(terrainNode);
-    rootNode->children.push_back(boxNode);
     rootNode->children.push_back(padNode);
+    rootNode->children.push_back(boxNode);
     rootNode->children.push_back(rickyNode);
     rickyNode->children.push_back(rickyFurNode);
 
@@ -271,6 +275,8 @@ void initialize_game(GLFWwindow* window) {
 
     rickyNode->position = {-50, 20, -90};
 
+    boxNode->position = { 0, 0, 0 };
+
     // texture IDs
     textNode->textureID = charmap_id;
     padNode->normalMapID = paddle_normal_id;
@@ -333,6 +339,8 @@ void initialize_game(GLFWwindow* window) {
     std::cout << fmt::format("Initialized scene with {} SceneNodes.", totalChildren(rootNode)) << std::endl;
 
     std::cout << "Ready. Click to start!" << std::endl;
+    cameraPosition = glm::vec3(0, 2, -20);
+    cameraRotation = glm::vec3(0, 0, 0);
 }
 
 void updateFrame(GLFWwindow* window) {
@@ -355,34 +363,89 @@ void updateFrame(GLFWwindow* window) {
         mouseRightPressed = false;
     }
 
-//    glm::vec3 camera_position_delta = glm::vec3(0,0,0);
-//    glm::vec3 camera_rotation_delta = glm::vec3(0,0,0);
-//    float camera_move_speed = 5; // todo
-//    float delta_time = 0.1; // todo
-//    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-//    {
-//        camera_position_delta += camera_move_speed * delta_time;
-//    }
+    glm::vec3 camera_position_delta = glm::vec3(0,0,0);
+    glm::vec3 camera_rotation_delta = glm::vec3(0,0,0);
+    float camera_move_speed = 10;
+    float camera_rotation_speed = 1;
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        camera_position_delta.z += camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        camera_position_delta.z -= camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        camera_position_delta.x += camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        camera_position_delta.x -= camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+    {
+        camera_position_delta.y += camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        camera_position_delta.y -= camera_move_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+    {
+        camera_rotation_delta.y += camera_rotation_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+    {
+        camera_rotation_delta.y -= camera_rotation_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+    {
+        camera_rotation_delta.x += camera_rotation_speed * timeDelta;
+    }
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+    {
+        camera_rotation_delta.x -= camera_rotation_speed * timeDelta;
+    }
 
     realTime += timeDelta;
 
-    glm::mat4 projection = glm::perspective(glm::radians(80.0f), float(DEFAULT_WINDOW_WIDTH) / float(DEFAULT_WINDOW_HEIGHT), 0.1f, 350.f);
+    glm::mat4 projection = glm::perspective(
+        glm::radians(80.0f),
+        float(DEFAULT_WINDOW_WIDTH) / float(DEFAULT_WINDOW_HEIGHT), //todo dynamic aspect
+        0.1f,
+        350.f
+    );
 
-    glm::vec3 cameraPosition = glm::vec3(0, 2, -20);
-//    glm::vec3 cameraRotation = glm::vec3(0, 0, 0); todo
-    glm::mat4 cameraTransform = glm::translate(-cameraPosition);
+    cameraRotation += camera_rotation_delta;
+    if(cameraRotation.x > glm::radians(90.f)){
+        cameraRotation.x = glm::radians(90.f);
+    } else if (cameraRotation.x < glm::radians(-90.f)){
+        cameraRotation.x = glm::radians(-90.f);
+    }
 
-    VP = projection * cameraTransform;
+    glm::mat4 rotation = glm::rotate(cameraRotation.z, glm::vec3(0,0,1));
+    rotation = glm::rotate(rotation, cameraRotation.x, glm::vec3(1,0,0));
+    rotation = glm::rotate(rotation, cameraRotation.y, glm::vec3(0,1,0));
+
+    VP = projection * rotation;
+
+    glm::mat4 cam_rot_mat = glm::rotate(-cameraRotation.y, glm::vec3(0,1,0));
+    glm::vec4 camera_position_delta4 = cam_rot_mat * glm::vec4(camera_position_delta, 1);
+    camera_position_delta = glm::vec3(camera_position_delta4);
+    cameraPosition += camera_position_delta;
+    VP = glm::translate(VP, cameraPosition);
 
     // Move and rotate various SceneNodes
-    boxNode->position = { 0, -10, -80 };
-
     rickyNode->rotation = {0, 0.1*realTime, 0.01*realTime};
 
+    glm::vec3 previous_boxDimensions = {180, 90, 90};
+    glm::vec3 previous_boxPosition = { 0, -10, -80 };;
     padNode->position  = {
-        boxNode->position.x - (boxDimensions.x/2) + (padDimensions.x/2) + (1 - padPositionX) * (boxDimensions.x - padDimensions.x),
-        boxNode->position.y - (boxDimensions.y/2) + (padDimensions.y/2),
-        boxNode->position.z - (boxDimensions.z/2) + (padDimensions.z/2) + (1 - padPositionZ) * (boxDimensions.z - padDimensions.z)
+            previous_boxPosition.x - (previous_boxDimensions.x/2) + (padDimensions.x/2) + (1 - padPositionX) * (previous_boxDimensions.x - padDimensions.x),
+            previous_boxPosition.y - (previous_boxDimensions.y/2) + (padDimensions.y/2),
+            previous_boxPosition.z - (previous_boxDimensions.z/2) + (padDimensions.z/2) + (1 - padPositionZ) * (previous_boxDimensions.z - padDimensions.z)
     };
 
     // overlapping lights alternate code:
@@ -402,6 +465,9 @@ void updateFrame(GLFWwindow* window) {
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
     fur_shader->activate();
+    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
+//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
+    skybox_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
 
@@ -512,18 +578,12 @@ void SceneNode::render() {
             break;
         case SKYBOX:
             if(vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP * modelTF;
-                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+                glm::mat4 mvp = VP; // no model
+                // undo camera translation
+                mvp = glm::translate(mvp, -cameraPosition); // todo use existing matrices instead?
                 skybox_shader->activate();
-                glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
                 glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-                glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-                glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
-                glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
-                glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
                 glBindTextureUnit(SKYBOX_CUBE_SAMPLER, textureID);
-
                 glBindVertexArray(vertexArrayObjectID);
                 glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
             }

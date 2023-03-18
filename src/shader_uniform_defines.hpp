@@ -20,4 +20,5 @@
 #define SIMPLE_ROUGHNESS_SAMPLER 2
 #define FUR_FUR_SAMPLER 3
 #define FUR_TURBULENCE_SAMPLER 4
-#define SKYBOX_CUBE_SAMPLER 3 // todo see if can be 0
+
+#define SKYBOX_CUBE_SAMPLER 0
