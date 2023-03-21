@@ -25,7 +25,7 @@ float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
 
 void main(){
-    float fur_strand_length = 4;
+    float fur_strand_length = 2.5;
     vec4 fur_texels[3];
     fur_texels[0] = texture(fur_texture, textureCoordinates_in[0]);
     fur_texels[1] = texture(fur_texture, textureCoordinates_in[1]);

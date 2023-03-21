@@ -5,7 +5,7 @@ struct PointLightSource {
     vec3 color;
 };
 
-#define point_light_sources_len 3
+#define point_light_sources_len 4
 in layout(location = 0) vec3 normal_in;
 in layout(location = 1) vec2 textureCoordinates;
 in layout(location = 2) vec3 world_pos;
@@ -83,7 +83,7 @@ void main()
     float ball_soft_inner = ball_radius / soft_shading_factor;
 
     // base ambient intensity
-    vec3 ambient_intensity = vec3(0.0, 0.0, 0.0);
+    vec3 ambient_intensity = vec3(0.25, 0.25, 0.35);
     // how much of a lightsource's power to add as ambient
     float light_ambiance = 0.75;
     // sums of lighting and reflective lighting
@@ -95,7 +95,7 @@ void main()
         vec3 light_dir = point_light_sources[i].position - world_pos.xyz;
         float light_dist = length(light_dir);
 
-        // how far from centre of mass the light ray passes
+        // how far from centre of mass of the ball the light ray passes
         vec3 ball_reject = reject(ball_dir, light_dir);
         float ball_rejectance = length(ball_reject);
         // scale to be 0 at soft shadows inner edge, 1 at outer edge
@@ -106,6 +106,8 @@ void main()
         if (light_dist < ball_dist-ball_radius || dot(ball_dir, light_dir) < 0) {
             ball_rejectance = 1;
         }
+        // todo ball no longer there
+        ball_rejectance = 1;
 
         light_dir = normalize(light_dir);
         vec3 light_intensity = point_light_sources[i].color / attenuation(light_dist);
@@ -136,6 +138,6 @@ void main()
     intensity.r = min(1., intensity.r);
     intensity.g = min(1., intensity.g);
     intensity.b = min(1., intensity.b);
-    color.rgb = intensity * frag_color.xyz + reflective_intensity;
+    color.rgb = intensity * frag_color.xyz + reflective_intensity + dither(textureCoordinates);
 
 }
