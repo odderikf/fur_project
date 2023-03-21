@@ -4,6 +4,7 @@
 // Original source: https://raw.githubusercontent.com/lvandeve/lodepng/master/examples/example_decode.cpp
 PNGImage loadPNGFile(std::string fileName)
 {
+    PNGImage image;
 	std::vector<unsigned char> png;
 	std::vector<unsigned char> pixels; //the raw pixels
 	unsigned int width, height;
@@ -13,7 +14,12 @@ PNGImage loadPNGFile(std::string fileName)
 	if(!error) error = lodepng::decode(pixels, width, height, png);
 
 	//if there's an error, display it
-	if(error) std::cout << "decoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+	if(error) {
+        std::cerr << __FILE__ << ":" << std::endl << "Line: " << __LINE__ << std::endl;
+        std::cerr << "decoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+        std::cerr << fileName << std::endl;
+        return image;
+    }
 
 	//the pixels are now in the vector "image", 4 bytes per pixel, ordered RGBARGBA..., use it as texture, draw it, ...
 
@@ -31,7 +37,6 @@ PNGImage loadPNGFile(std::string fileName)
 		}
 	}
 
-	PNGImage image;
 	image.width = width;
 	image.height = height;
 	image.pixels = pixels;

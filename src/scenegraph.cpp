@@ -1,5 +1,7 @@
 #include "scenegraph.hpp"
 #include <iostream>
+#include <utilities/mesh.hpp>
+#include <utilities/glutils.hpp>
 
 SceneNode* createSceneNode() {
 	return new SceneNode();
@@ -18,20 +20,11 @@ int totalChildren(SceneNode* parent) {
 	return count;
 }
 
-// Pretty prints the current values of a SceneNode instance to stdout
-void printNode(SceneNode* node) {
-	printf(
-		"SceneNode {\n"
-		"    Child count: %i\n"
-		"    Rotation: (%f, %f, %f)\n"
-		"    Location: (%f, %f, %f)\n"
-		"    Reference point: (%f, %f, %f)\n"
-		"    VAO ID: %i\n"
-		"}\n",
-		int(node->children.size()),
-		node->rotation.x, node->rotation.y, node->rotation.z,
-		node->position.x, node->position.y, node->position.z,
-		node->referencePoint.x, node->referencePoint.y, node->referencePoint.z, 
-		node->vertexArrayObjectID);
-}
 
+Geometry::Geometry(const std::string &objname) : SceneNode() {
+    Mesh m("../res/models/" + objname + ".obj");
+    unsigned int terrainVAO = generateBuffer(m);
+    vertexArrayObjectID = terrainVAO;
+    VAOIndexCount = m.indices.size();
+
+}

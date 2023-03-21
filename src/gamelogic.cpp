@@ -18,24 +18,28 @@
 #include "gamelogic.h"
 #include "shader_uniform_defines.hpp"
 #include "window.hpp"
+#include "scenegraph.hpp"
+
 
 double padPositionX = 0;
 double padPositionZ = 0;
 
 SceneNode* rootNode;
-SceneNode* terrainNode;
-SceneNode* boxNode;
-SceneNode* rickyNode;
-SceneNode* rickyFurNode;
-SceneNode* padNode;
-SceneNode* padLightNode;
-SceneNode* topLeftLightNode;
-SceneNode* topRightLightNode;
-SceneNode* trio0LightNode;
-SceneNode* trio1LightNode;
-SceneNode* trio2LightNode;
-SceneNode* whiteLightNode;
-SceneNode* textNode;
+TexturedGeometry* terrainNode;
+TexturedGeometry* broadTerrainNode;
+Skybox* skyBoxNode;
+TexturedGeometry* rickyNode;
+FurLayer* rickyFurNode;
+TexturedGeometry* padNode;
+PointLight* padLightNode;
+PointLight* topLeftLightNode;
+PointLight* topRightLightNode;
+PointLight* trio0LightNode;
+PointLight* trio1LightNode;
+PointLight* trio2LightNode;
+PointLight* whiteLightNode;
+PointLight* sunNode; // todo dirlight
+FlatGeometry* textNode;
 
 double ballRadius = 3.0f;
 
@@ -93,8 +97,8 @@ void mouseCallback(GLFWwindow* window, double x, double y) {
     if (padPositionX < 0) padPositionX = 0;
     if (padPositionZ > 1) padPositionZ = 1;
     if (padPositionZ < 0) padPositionZ = 0;
-
-    glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
+// todo
+//    glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
 }
 
 GLuint create_cubemap(const std::string &foldername) {
@@ -125,6 +129,13 @@ GLuint create_texture(const std::string &filename) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     return tex_id;
+}
+
+TexturedGeometry::TexturedGeometry(const std::string &objname) : Geometry(objname) {
+    std::string filebase = "../res/textures/" + objname;
+    textureID = create_texture(filebase + "_col.png");
+    normalMapID = create_texture(filebase + "_nrm.png");
+    roughnessID = create_texture(filebase + "_rgh.png");
 }
 
 void initialize_game(GLFWwindow* window) {
@@ -160,10 +171,7 @@ void initialize_game(GLFWwindow* window) {
     GLuint paddle_diffuse_id   = create_texture("../res/textures/paddle_col.png");
     GLuint paddle_roughness_id = create_texture("../res/textures/paddle_rgh.png");
 
-    GLuint ricky_normal_id    = create_texture("../res/textures/ricky_nrm.png");
     GLuint ricky_fur_normal_id    = create_texture("../res/textures/ricky_fur_nrm.png");
-    GLuint ricky_diffuse_id   = create_texture("../res/textures/ricky_col.png");
-    GLuint ricky_roughness_id = create_texture("../res/textures/ricky_rgh.png");
     GLuint ricky_fur_texture_id = create_texture("../res/textures/ricky_fur.png");
 
     GLuint turbulence_id = create_texture("../res/textures/turbulence.png");
@@ -174,40 +182,42 @@ void initialize_game(GLFWwindow* window) {
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
     Mesh box = cube(boxDimensions, glm::vec2(90), true, true);
     Mesh sphere = generateSphere(1.0, 40, 40);
-    Mesh ricky("../res/models/ricky.obj");
-    Mesh terrain("../res/models/terrain.obj");
 
     const float textwidth = 400;
     const float textratio = 1.34482759f;
     Mesh text_mesh = generateTextGeometryBuffer("Click to start", textratio, textwidth);
 
 
-    // Fill buffers
+    // Generated meshes
     unsigned int boxVAO  = generateBuffer(box);
     unsigned int padVAO  = generateBuffer(pad);
     unsigned int textVAO = generateBuffer(text_mesh);
-    unsigned int rickyVAO = generateBuffer(ricky);
-    unsigned int terrainVAO = generateBuffer(terrain);
 
     // Construct scene
-    rootNode = createSceneNode();
-    boxNode  = createSceneNode();
-    terrainNode = createSceneNode();
-    padNode  = createSceneNode();
-    rickyNode = createSceneNode();
-    rickyFurNode = createSceneNode();
-    padLightNode = createSceneNode();
-    topLeftLightNode = createSceneNode();
-    topRightLightNode = createSceneNode();
-    trio0LightNode = createSceneNode();
-    trio1LightNode = createSceneNode();
-    trio2LightNode = createSceneNode();
-    whiteLightNode = createSceneNode();
-    textNode = createSceneNode();
+    rootNode = new SceneNode();
+    skyBoxNode  = new Skybox();
+    terrainNode = new TexturedGeometry("terrain");
+    broadTerrainNode = new TexturedGeometry("broad_terrain");
+    padNode  = new TexturedGeometry();
+    rickyNode = new TexturedGeometry("ricky");
+    rickyFurNode = new FurLayer();
+    padLightNode = new PointLight();
+    topLeftLightNode = new PointLight();
+    topRightLightNode = new PointLight();
+    trio0LightNode = new PointLight();
+    trio1LightNode = new PointLight();
+    trio2LightNode = new PointLight();
+    whiteLightNode = new PointLight();
+    sunNode = new PointLight();
+    textNode = new FlatGeometry();
 
-//    rootNode->children.push_back(terrainNode);
+    rootNode->children.push_back(skyBoxNode);
+
+    rootNode->children.push_back(sunNode);
+
+    rootNode->children.push_back(terrainNode);
+    terrainNode->children.push_back(broadTerrainNode);
     rootNode->children.push_back(padNode);
-    rootNode->children.push_back(boxNode);
     rootNode->children.push_back(rickyNode);
     rickyNode->children.push_back(rickyFurNode);
 
@@ -232,11 +242,10 @@ void initialize_game(GLFWwindow* window) {
         rootNode->children.push_back(trio2LightNode);
     }
 
+    // gen meshes
 
-    terrainNode->vertexArrayObjectID = terrainVAO;
-    terrainNode->VAOIndexCount = terrain.indices.size();
-    boxNode->vertexArrayObjectID  = boxVAO;
-    boxNode->VAOIndexCount        = box.indices.size();
+    skyBoxNode->vertexArrayObjectID  = boxVAO;
+    skyBoxNode->VAOIndexCount        = box.indices.size();
 
     padNode->vertexArrayObjectID  = padVAO;
     padNode->VAOIndexCount        = pad.indices.size();
@@ -244,58 +253,44 @@ void initialize_game(GLFWwindow* window) {
     textNode->vertexArrayObjectID = textVAO;
     textNode->VAOIndexCount       = text_mesh.indices.size();
 
-    rickyNode->vertexArrayObjectID = rickyVAO;
-    rickyNode->VAOIndexCount       = ricky.indices.size();
-    rickyFurNode->vertexArrayObjectID = rickyVAO;
-    rickyFurNode->VAOIndexCount       = ricky.indices.size();
+    // reused meshes
+    rickyFurNode->vertexArrayObjectID = rickyNode->vertexArrayObjectID;
+    rickyFurNode->VAOIndexCount       = rickyNode->VAOIndexCount;
 
-    topLeftLightNode->nodeType = POINT_LIGHT;
-    topRightLightNode->nodeType = POINT_LIGHT;
-    padLightNode->nodeType = POINT_LIGHT;
-
-    trio0LightNode->nodeType = POINT_LIGHT;
-    trio1LightNode->nodeType = POINT_LIGHT;
-    trio2LightNode->nodeType = POINT_LIGHT;
-
-    whiteLightNode->nodeType = POINT_LIGHT;
-
-    textNode->nodeType = FLAT_GEOMETRY;
-
-    boxNode->nodeType = SKYBOX;
-    padNode->nodeType = NORMAL_MAPPED_GEOMETRY;
-    rickyNode->nodeType = NORMAL_MAPPED_GEOMETRY;
-    rickyFurNode->nodeType = FUR_GEOMETRY;
-
+    // light positions
     topLeftLightNode->position = { -85, 30, -120};
     topRightLightNode->position = { 85, 30, -120};
     padLightNode->position = {0,5,13};
     whiteLightNode->position = {0,20,-20};
+    sunNode->position = {0, 5000, 0};
 
+    // geometry positions
     textNode->position = { DEFAULT_WINDOW_WIDTH/2 - textwidth/2, DEFAULT_WINDOW_HEIGHT/2, 0};
 
     rickyNode->position = {-50, 20, -90};
 
-    boxNode->position = { 0, 0, 0 };
+    skyBoxNode->position = {0, 0, 0 };
+
+    terrainNode->position = {0, -15, 0};
+    broadTerrainNode->position = {0, -0.4, 0};
 
     // texture IDs
     textNode->textureID = charmap_id;
     padNode->normalMapID = paddle_normal_id;
     padNode->textureID = paddle_diffuse_id;
     padNode->roughnessID = paddle_roughness_id;
-    rickyNode->normalMapID = ricky_normal_id;
-    rickyNode->textureID = ricky_diffuse_id;
-    rickyNode->roughnessID = ricky_roughness_id;
     rickyFurNode->furID = ricky_fur_texture_id;
     rickyFurNode->normalMapID = ricky_fur_normal_id;
-    rickyFurNode->textureID = ricky_diffuse_id;
-    rickyFurNode->roughnessID = ricky_roughness_id;
+    rickyFurNode->textureID = rickyNode->textureID;
+    rickyFurNode->roughnessID = rickyNode->roughnessID;
     turbulenceID = turbulence_id;
-    boxNode->textureID = skybox_id;
+    skyBoxNode->textureID = skybox_id;
 
     // uniform array index IDs
     topLeftLightNode->lightID = 0;
     topRightLightNode->lightID = 1;
     padLightNode->lightID = 2;
+    sunNode->lightID = 3;
 
     whiteLightNode->lightID = 0;
 
@@ -308,6 +303,9 @@ void initialize_game(GLFWwindow* window) {
     topRightLightNode->lightColor = {0., 1., 0.};
     padLightNode->lightColor = {0., 0., 1.};
 
+    sunNode->lightColor = {1, 1, 0.5};
+    sunNode->lightColor *= 1000;
+
     whiteLightNode->lightColor = {0.9, 0.9, 0.9};
 
     trio0LightNode->lightColor = {1., 0., 0.};
@@ -316,7 +314,7 @@ void initialize_game(GLFWwindow* window) {
 
 
     // find uniform locations
-    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode}) {
+    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
         uniform_light_sources_position_loc[node->lightID] = lighting_shader->getUniformFromName(poslocname);
@@ -325,7 +323,7 @@ void initialize_game(GLFWwindow* window) {
         uniform_light_sources_color_loc[node->lightID] = lighting_shader->getUniformFromName(collocname);
     }
     // do it again for the fur shader
-    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode}) {
+    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
         fur_uniform_light_sources_position_loc[node->lightID] = fur_shader->getUniformFromName(poslocname);
@@ -339,12 +337,12 @@ void initialize_game(GLFWwindow* window) {
     std::cout << fmt::format("Initialized scene with {} SceneNodes.", totalChildren(rootNode)) << std::endl;
 
     std::cout << "Ready. Click to start!" << std::endl;
-    cameraPosition = glm::vec3(0, 2, -20);
+    cameraPosition = glm::vec3(0, -20, -20);
     cameraRotation = glm::vec3(0, 0, 0);
 }
 
 void updateFrame(GLFWwindow* window) {
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); todo
 
     double timeDelta = getTimeDeltaSeconds();
 
@@ -415,7 +413,7 @@ void updateFrame(GLFWwindow* window) {
         glm::radians(80.0f),
         float(DEFAULT_WINDOW_WIDTH) / float(DEFAULT_WINDOW_HEIGHT), //todo dynamic aspect
         0.1f,
-        350.f
+        4000.f
     );
 
     cameraRotation += camera_rotation_delta;
@@ -444,7 +442,7 @@ void updateFrame(GLFWwindow* window) {
     glm::vec3 previous_boxPosition = { 0, -10, -80 };;
     padNode->position  = {
             previous_boxPosition.x - (previous_boxDimensions.x/2) + (padDimensions.x/2) + (1 - padPositionX) * (previous_boxDimensions.x - padDimensions.x),
-            previous_boxPosition.y - (previous_boxDimensions.y/2) + (padDimensions.y/2),
+            100 + previous_boxPosition.y - (previous_boxDimensions.y/2) + (padDimensions.y/2),
             previous_boxPosition.z - (previous_boxDimensions.z/2) + (padDimensions.z/2) + (1 - padPositionZ) * (previous_boxDimensions.z - padDimensions.z)
     };
 
@@ -460,7 +458,7 @@ void updateFrame(GLFWwindow* window) {
     rotlight = glm::rotate(float(realTime + 2*2*glm::pi<float>()/3.), glm::vec3(0,0,1));
     trio2LightNode->position += glm::vec3(rotlight * rot);
 
-    updateNodeTransformations(rootNode, glm::identity<glm::mat4>());
+    rootNode->update(glm::identity<glm::mat4>());
     lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
@@ -473,123 +471,139 @@ void updateFrame(GLFWwindow* window) {
 
 }
 
-void updateNodeTransformations(SceneNode* node, glm::mat4 transformationThusFar) {
+void PointLight::update(glm::mat4 transformationThusFar) {
+    // find total position in graph by model matrix
+    lighting_shader->activate();
+    glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
+    glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_shader->activate();
+    glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    SceneNode::update(transformationThusFar);
+}
+
+void DirLight::update(glm::mat4 transformationThusFar) {
+    // find total position in graph by model matrix
+    lighting_shader->activate();
+    glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
+    glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_shader->activate();
+    glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    SceneNode::update(transformationThusFar);
+}
+void SceneNode::update(glm::mat4 transformationThusFar) {
     glm::mat4 transformationMatrix =
-              glm::translate(node->position)
-            * glm::translate(node->referencePoint)
-            * glm::rotate(node->rotation.y, glm::vec3(0,1,0))
-            * glm::rotate(node->rotation.x, glm::vec3(1,0,0))
-            * glm::rotate(node->rotation.z, glm::vec3(0,0,1))
-            * glm::scale(node->scale)
-            * glm::translate(-node->referencePoint);
+              glm::translate(position)
+            * glm::translate(referencePoint)
+            * glm::rotate(rotation.y, glm::vec3(0,1,0))
+            * glm::rotate(rotation.x, glm::vec3(1,0,0))
+            * glm::rotate(rotation.z, glm::vec3(0,0,1))
+            * glm::scale(scale)
+            * glm::translate(-referencePoint);
 
-    node->modelTF = transformationThusFar * transformationMatrix;
+    modelTF = transformationThusFar * transformationMatrix;
 
-    switch(node->nodeType) {
-        case GEOMETRY: break;
-        case POINT_LIGHT: {
-            // find total position in graph by model matrix
-            lighting_shader->activate();
-            glm::vec4 lightpos = node->modelTF * glm::vec4(0, 0, 0, 1);
-            glUniform3fv(uniform_light_sources_position_loc[node->lightID], 1, glm::value_ptr(lightpos));
-            glUniform3fv(uniform_light_sources_color_loc[node->lightID], 1, glm::value_ptr(node->lightColor));
-            fur_shader->activate();
-            glUniform3fv(fur_uniform_light_sources_position_loc[node->lightID], 1, glm::value_ptr(lightpos));
-            glUniform3fv(fur_uniform_light_sources_color_loc[node->lightID], 1, glm::value_ptr(node->lightColor));
-        }break;
-        case SPOT_LIGHT: break;
-        case FLAT_GEOMETRY: break;
-        case NORMAL_MAPPED_GEOMETRY: break;
-        case FUR_GEOMETRY: break;
-        case SKYBOX: break;
-    }
-
-    for(SceneNode* child : node->children) {
-        updateNodeTransformations(child, node->modelTF);
+    for(SceneNode* child : children) {
+        child->update( modelTF);
     }
 }
 
 void SceneNode::render() {
-    switch(nodeType) {
-        case NORMAL_MAPPED_GEOMETRY:
-            if(vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP * modelTF;
-                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-                lighting_shader->activate();
-                glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
-                glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-                glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-                glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
-                glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
-                glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
-
-                glBindVertexArray(vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-            }
-            break;
-
-    case FUR_GEOMETRY:
-        if(vertexArrayObjectID != -1) {
-            glm::mat4 mvp = VP * modelTF;
-            glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-            fur_shader->activate();
-            glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-            glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-            glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-            glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
-            glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
-            glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
-            glBindTextureUnit(FUR_FUR_SAMPLER, furID);
-            glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
-
-            glBindVertexArray(vertexArrayObjectID);
-            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-        }
-            break;
-
-        case GEOMETRY:
-            if(vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP * modelTF;
-                glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-                lighting_shader->activate();
-                glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
-                glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-                glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-
-                glBindVertexArray(vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-            }
-            break;
-        case POINT_LIGHT: break;
-        case SPOT_LIGHT: break;
-        case FLAT_GEOMETRY:
-            if(vertexArrayObjectID != -1) {
-                flat_geometry_shader->activate();
-                glm::mat4 ortho = glm::ortho(0.f, (float)DEFAULT_WINDOW_WIDTH, 0.f, (float)DEFAULT_WINDOW_HEIGHT, -1.f, 1.f);
-                ortho = ortho * modelTF;
-                glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(ortho));
-
-                glBindTextureUnit(TEX_TEXT_SAMPLER, textureID);
-                glBindVertexArray(vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-            }
-            break;
-        case SKYBOX:
-            if(vertexArrayObjectID != -1) {
-                glm::mat4 mvp = VP; // no model
-                // undo camera translation
-                mvp = glm::translate(mvp, -cameraPosition); // todo use existing matrices instead?
-                skybox_shader->activate();
-                glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-                glBindTextureUnit(SKYBOX_CUBE_SAMPLER, textureID);
-                glBindVertexArray(vertexArrayObjectID);
-                glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
-            }
-            break;
+    for(SceneNode* child : children) {
+        child->render();
     }
+}
 
+void Skybox::render() {
+    if(vertexArrayObjectID != -1) {
+        glm::mat4 mvp = VP; // no model
+        // undo camera translation
+        mvp = glm::translate(mvp, -cameraPosition); // todo use existing matrices instead?
+        skybox_shader->activate();
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+        glBindTextureUnit(SKYBOX_CUBE_SAMPLER, textureID);
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+    for(SceneNode* child : children) {
+        child->render();
+    }
+}
+
+void Geometry::render() {
+    if(vertexArrayObjectID != -1) {
+        glm::mat4 mvp = VP * modelTF;
+        glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+        lighting_shader->activate();
+        glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+    SceneNode::render();
+}
+
+
+void FurLayer::render() {
+    if(vertexArrayObjectID != -1) {
+        glm::mat4 mvp = VP * modelTF;
+        glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+        fur_shader->activate();
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+        glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+        glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
+        glBindTextureUnit(FUR_FUR_SAMPLER, furID);
+        glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
+
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+    for(SceneNode* child : children) {
+        child->render();
+    }
+}
+
+void TexturedGeometry::render() {
+    if(vertexArrayObjectID != -1) {
+        glm::mat4 mvp = VP * modelTF;
+        glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+        lighting_shader->activate();
+        glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+        glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+        glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
+
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+    for(SceneNode* child : children) {
+        child->render();
+    }
+}
+
+void FlatGeometry::render() {
+    if(vertexArrayObjectID != -1) {
+        flat_geometry_shader->activate();
+        glm::mat4 ortho = glm::ortho(0.f, (float)DEFAULT_WINDOW_WIDTH, 0.f, (float)DEFAULT_WINDOW_HEIGHT, -1.f, 1.f);
+        ortho = ortho * modelTF;
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(ortho));
+
+        glBindTextureUnit(TEX_TEXT_SAMPLER, textureID);
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
     for(SceneNode* child : children) {
         child->render();
     }

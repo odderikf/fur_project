@@ -52,7 +52,7 @@ unsigned int generateBuffer(Mesh &mesh) {
         tangents.at(i) = tangents.at(i+1) = tangents.at(i+2) = tangent;
     }
 
-    generateAttribute(3, 3, tangents, false);
+    generateAttribute(3, 3, tangents, true);
 
     unsigned int indexBufferID;
     glGenBuffers(1, &indexBufferID);

@@ -3,10 +3,8 @@
 #include <glm/glm.hpp>
 
 #include <vector>
-
-enum SceneNodeType {
-	GEOMETRY, POINT_LIGHT, SPOT_LIGHT, FLAT_GEOMETRY, NORMAL_MAPPED_GEOMETRY, FUR_GEOMETRY, SKYBOX
-};
+#include <glad/glad.h>
+#include <string>
 
 class SceneNode {
 public:
@@ -16,17 +14,7 @@ public:
 		scale = glm::vec3(1, 1, 1);
 
         referencePoint = glm::vec3(0, 0, 0);
-        vertexArrayObjectID = -1;
-        VAOIndexCount = 0;
-
-        lightID = -1;
-        textureID = -1;
-        normalMapID = -1;
-        roughnessID = -1;
-        furID = -1;
-        lightColor = glm::vec3(0.6, 0.6, 0.6);
-
-        nodeType = GEOMETRY;
+        furID = 0;
 
 	}
 
@@ -45,23 +33,69 @@ public:
 	// The location of the node's reference point
 	glm::vec3 referencePoint;
 
-	// The ID of the VAO containing the "appearance" of this SceneNode.
-	int vertexArrayObjectID;
-	unsigned int VAOIndexCount;
+    GLuint furID;
 
+    virtual void render();
+
+    virtual void update(glm::mat4 transformationThusFar);
+};
+
+class Geometry : public SceneNode {
+public:
+    GLuint textureID = 0;
+    int vertexArrayObjectID = -1;
+    GLsizei VAOIndexCount = 0;
+    Geometry() : SceneNode() {}
+    explicit Geometry(const std::string &objname);
+    void render() override;
+};
+
+class TexturedGeometry : public Geometry {
+public:
+
+    GLuint roughnessID = 0;
+    GLuint normalMapID = 0;
+    TexturedGeometry() : Geometry() {}
+    explicit TexturedGeometry(const std::string &objname);
+    void render() override;
+};
+
+class Skybox : public Geometry {
+public:
+    Skybox() : Geometry() {}
+    explicit Skybox(const std::string &objname) : Geometry(objname) {};
+    void render() override;
+};
+
+class FurLayer : public TexturedGeometry {
+public:
+    FurLayer() : TexturedGeometry() {}
+    explicit FurLayer(const std::string &objname) : TexturedGeometry(objname) {};
+    void render() override;
+};
+
+class FlatGeometry : public Geometry {
+public:
+    FlatGeometry() : Geometry() {}
+    explicit FlatGeometry(const std::string &objname) : Geometry(objname) {};
+    void render() override;
+};
+
+class LightNode : public SceneNode {
+public:
     // index in light arrays, if nodeType is POINT_LIGHT / SPOT_LIGHT.
-    int lightID;
-    glm::vec3 lightColor;
+    int lightID = 0;
+    glm::vec3 lightColor = glm::vec3(0.6, 0.6, 0.6);
 
-    int textureID;
-    int roughnessID;
-    int normalMapID;
-    int furID;
+};
 
-	// Node type is used to determine how to handle the contents of a node
-	SceneNodeType nodeType;
-
-    void render();
+class PointLight : public LightNode {
+public:
+    void update(glm::mat4 transformationThusFar) override;
+};
+class DirLight : public LightNode {
+public:
+    void update(glm::mat4 transformationThusFar) override;
 };
 
 SceneNode* createSceneNode();
