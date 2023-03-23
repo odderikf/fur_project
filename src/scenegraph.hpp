@@ -61,7 +61,6 @@ public:
 class Skybox : public Geometry {
 public:
     Skybox() : Geometry() {}
-    explicit Skybox(const std::string &objname) : Geometry(objname) {};
     void render() override;
 };
 
@@ -88,6 +87,10 @@ public:
     int lightID = 0;
     glm::vec3 lightColor = glm::vec3(0.6, 0.6, 0.6);
 
+};
+class CompositorNode : public Geometry {
+public:
+    void render() override;
 };
 
 class PointLight : public LightNode {

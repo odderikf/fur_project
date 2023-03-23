@@ -36,30 +36,15 @@ GLFWwindow* initialize_window(){
     return window;
 }
 
-void initialize_gl_settings(GLFWwindow *window) {
-    // lequal so skybox can be backmost at all times without z-fighting
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
 
-    glEnable(GL_CULL_FACE);
-
-    // Enable transparency
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // Set default colour after clearing the colour buffer
-    glClearColor(1.f, 0.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glfwSwapBuffers(window);
-}
 
 int main()
 {
     GLFWwindow* window = initialize_window();
-    initialize_gl_settings(window);
     run_game(window);
 
     // Terminate GLFW (no need to call glfwDestroyWindow)
+    // todo gldeleteframebuffers?
     glfwTerminate();
     return EXIT_SUCCESS;
 }

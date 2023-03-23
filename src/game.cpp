@@ -23,7 +23,6 @@ void run_game(GLFWwindow* window){
     // Rendering Loop
     while (!glfwWindowShouldClose(window))
     {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glfwPollEvents();
         handle_poll_events(window);

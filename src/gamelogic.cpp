@@ -28,7 +28,6 @@ SceneNode* rootNode;
 FurLayer* terrainNode;
 TexturedGeometry* broadTerrainNode;
 Skybox* skyBoxNode;
-TexturedGeometry* rickyNode;
 FurLayer* rickyFurNode;
 TexturedGeometry* padNode;
 PointLight* padLightNode;
@@ -41,6 +40,10 @@ PointLight* whiteLightNode;
 PointLight* sunNode; // todo dirlight
 FlatGeometry* textNode;
 
+CompositorNode *compositeNode;
+GLuint first_pass_fb;
+GLuint first_pass_tex;
+
 double ballRadius = 3.0f;
 
 // These are heap allocated, because they should not be initialised at the start of the program
@@ -48,6 +51,7 @@ Gloom::Shader* lighting_shader;
 Gloom::Shader* flat_geometry_shader;
 Gloom::Shader* fur_shader;
 Gloom::Shader* skybox_shader;
+Gloom::Shader* composite_shader;
 
 const glm::vec3 boxDimensions(1, 1, 1);
 const glm::vec3 padDimensions(30, 3, 40);
@@ -146,17 +150,56 @@ FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
 
 void initialize_game(GLFWwindow* window) {
 
+    // gl settings
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+
+    glClearColor(0.f, 0.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glfwSwapBuffers(window);
+
+    // set up first pass frame buffer
+    glGenFramebuffers(1, &first_pass_fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, first_pass_fb);
+
+    // texture output
+    glGenTextures(1, &first_pass_tex);
+    glBindTexture(GL_TEXTURE_2D, first_pass_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                                0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, first_pass_tex, 0);
+
+    // depth buffer
+    unsigned int rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    // its own clear color
+    glClearColor(1.f, 0.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     glfwSetCursorPosCallback(window, mouseCallback);
 
+    // general shader (phong)
     lighting_shader = new Gloom::Shader();
     lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/simple.frag");
     lighting_shader->activate();
 
+    // text / UI / 2d shader
     flat_geometry_shader = new Gloom::Shader();
     flat_geometry_shader->makeBasicShader("../res/shaders/flat_geom.vert", "../res/shaders/flat_geom.frag");
     flat_geometry_shader->activate();
 
+    // Fur shell geometry shader todo fins?
     fur_shader = new Gloom::Shader();
     fur_shader->attach("../res/shaders/fur.vert");
     fur_shader->attach("../res/shaders/fur.frag");
@@ -164,22 +207,19 @@ void initialize_game(GLFWwindow* window) {
     fur_shader->link();
     fur_shader->activate();
 
+    // shader for position invariant skybox
     skybox_shader = new Gloom::Shader();
     skybox_shader->attach("../res/shaders/skybox.vert");
     skybox_shader->attach("../res/shaders/skybox.frag");
     skybox_shader->link();
     skybox_shader->activate();
 
-    // create textures
-    GLuint charmap_id = create_texture("../res/textures/charmap.png");
-
-    GLuint paddle_normal_id    = create_texture("../res/textures/paddle_nrm.png");
-    GLuint paddle_diffuse_id   = create_texture("../res/textures/paddle_col.png");
-    GLuint paddle_roughness_id = create_texture("../res/textures/paddle_rgh.png");
-
-    GLuint turbulence_id = create_texture("../res/textures/turbulence.png");
-
-    GLuint skybox_id = create_cubemap("../res/textures/skybox/");
+    // shader that composits framebuffers to screen
+    composite_shader = new Gloom::Shader();
+    composite_shader->attach("../res/shaders/compositor.vert");
+    composite_shader->attach("../res/shaders/compositor.frag");
+    composite_shader->link();
+    composite_shader->activate();
 
     // gen meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
@@ -212,6 +252,18 @@ void initialize_game(GLFWwindow* window) {
     whiteLightNode = new PointLight();
     sunNode = new PointLight();
     textNode = new FlatGeometry();
+    compositeNode = new CompositorNode();
+
+    // special case textures IDs
+    textNode->textureID = create_texture("../res/textures/charmap.png");
+
+    padNode->normalMapID = create_texture("../res/textures/paddle_nrm.png");
+    padNode->textureID   = create_texture("../res/textures/paddle_col.png");
+    padNode->roughnessID = create_texture("../res/textures/paddle_rgh.png");
+
+    turbulenceID = create_texture("../res/textures/turbulence.png");
+
+    skyBoxNode->textureID = create_cubemap("../res/textures/skybox/");
 
     rootNode->children.push_back(skyBoxNode);
 
@@ -254,6 +306,12 @@ void initialize_game(GLFWwindow* window) {
     textNode->vertexArrayObjectID = textVAO;
     textNode->VAOIndexCount       = text_mesh.indices.size();
 
+    Mesh compositeMesh;
+    compositeMesh.vertices = {{-1,-1,0.5}, {1,-1,0.5}, {-1,1,0.5}, {1,1,0.5}};
+    compositeMesh.indices = {0,1,2, 1,3,2};
+    compositeNode->vertexArrayObjectID = generateBuffer(compositeMesh);
+    compositeNode->VAOIndexCount = 6;
+
     // light positions
     topLeftLightNode->position = { -85, 30, -120};
     topRightLightNode->position = { 85, 30, -120};
@@ -273,13 +331,6 @@ void initialize_game(GLFWwindow* window) {
 
     terrainNode->strand_length = 25;
 
-    // texture IDs
-    textNode->textureID = charmap_id;
-    padNode->normalMapID = paddle_normal_id;
-    padNode->textureID = paddle_diffuse_id;
-    padNode->roughnessID = paddle_roughness_id;
-    turbulenceID = turbulence_id;
-    skyBoxNode->textureID = skybox_id;
 
     // uniform array index IDs
     topLeftLightNode->lightID = 0;
@@ -506,6 +557,23 @@ void SceneNode::update(glm::mat4 transformationThusFar) {
     }
 }
 
+void CompositorNode::render() {
+    if(vertexArrayObjectID != -1) {
+        glm::mat4 mvp = VP * modelTF;
+        glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+        composite_shader->activate();
+        glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
+        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+
+        glBindTextureUnit(0, first_pass_tex); // todo define
+
+        glBindVertexArray(vertexArrayObjectID);
+        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+    }
+}
+
 void SceneNode::render() {
     for(SceneNode* child : children) {
         child->render();
@@ -611,5 +679,14 @@ void renderFrame(GLFWwindow* window) {
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
 
+    glEnable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, first_pass_fb);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     rootNode->render();
+
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    compositeNode->render();
 }
