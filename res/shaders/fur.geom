@@ -12,6 +12,7 @@ in layout(location = 3) vec3 tangent_in[3];
 uniform layout(location = 1) mat3 normal_matrix;
 uniform layout(location = 3) mat4 MVP;
 uniform layout(location = 4) mat4 model;
+uniform layout(location = 6) float fur_strand_length;
 
 layout(binding = 3) uniform sampler2D fur_texture;
 
@@ -25,7 +26,6 @@ float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
 
 void main(){
-    float fur_strand_length = 2.5;
     vec4 fur_texels[3];
     fur_texels[0] = texture(fur_texture, textureCoordinates_in[0]);
     fur_texels[1] = texture(fur_texture, textureCoordinates_in[1]);

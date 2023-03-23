@@ -16,7 +16,6 @@ uniform layout(location = 1) mat3 normal_matrix;
 uniform layout(location = 2) vec3 campos;
 uniform PointLightSource point_light_sources[point_light_sources_len];
 uniform layout(location = 5) vec3 ball_position;
-uniform layout(location = 6) bool enable_nmap;
 
 layout(binding = 0) uniform sampler2D tex;
 layout(binding = 1) uniform sampler2D normal_map;

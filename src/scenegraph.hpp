@@ -14,7 +14,6 @@ public:
 		scale = glm::vec3(1, 1, 1);
 
         referencePoint = glm::vec3(0, 0, 0);
-        furID = 0;
 
 	}
 
@@ -33,7 +32,6 @@ public:
 	// The location of the node's reference point
 	glm::vec3 referencePoint;
 
-    GLuint furID;
 
     virtual void render();
 
@@ -69,8 +67,11 @@ public:
 
 class FurLayer : public TexturedGeometry {
 public:
+    GLuint furID = 0;
+    GLuint furNormalMapID = 0;
+    float strand_length = 2.5;
     FurLayer() : TexturedGeometry() {}
-    explicit FurLayer(const std::string &objname) : TexturedGeometry(objname) {};
+    explicit FurLayer(const std::string &objname);
     void render() override;
 };
 

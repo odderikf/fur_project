@@ -50,6 +50,7 @@ void main()
     if (enable_nmap) { // todo rename variable?
         // get the texture color
         frag_color = texture(tex, textureCoordinates);
+        if (frag_color.a == 0) discard;
         // get the roughness, how unshiny it is
         float roughness = texture(roughness_map, textureCoordinates).x;
         mat_shine = (5.f/(roughness*roughness));

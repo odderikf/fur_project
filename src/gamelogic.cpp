@@ -25,7 +25,7 @@ double padPositionX = 0;
 double padPositionZ = 0;
 
 SceneNode* rootNode;
-TexturedGeometry* terrainNode;
+FurLayer* terrainNode;
 TexturedGeometry* broadTerrainNode;
 Skybox* skyBoxNode;
 TexturedGeometry* rickyNode;
@@ -138,6 +138,12 @@ TexturedGeometry::TexturedGeometry(const std::string &objname) : Geometry(objnam
     roughnessID = create_texture(filebase + "_rgh.png");
 }
 
+FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
+    std::string filebase = "../res/textures/" + objname;
+    furID = create_texture(filebase + "_fur.png");
+    furNormalMapID = create_texture(filebase + "_fur_nrm.png");
+}
+
 void initialize_game(GLFWwindow* window) {
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
@@ -171,9 +177,6 @@ void initialize_game(GLFWwindow* window) {
     GLuint paddle_diffuse_id   = create_texture("../res/textures/paddle_col.png");
     GLuint paddle_roughness_id = create_texture("../res/textures/paddle_rgh.png");
 
-    GLuint ricky_fur_normal_id    = create_texture("../res/textures/ricky_fur_nrm.png");
-    GLuint ricky_fur_texture_id = create_texture("../res/textures/ricky_fur.png");
-
     GLuint turbulence_id = create_texture("../res/textures/turbulence.png");
 
     GLuint skybox_id = create_cubemap("../res/textures/skybox/");
@@ -185,10 +188,10 @@ void initialize_game(GLFWwindow* window) {
 
     const float textwidth = 400;
     const float textratio = 1.34482759f;
-    Mesh text_mesh = generateTextGeometryBuffer("Click to start", textratio, textwidth);
 
 
     // Generated meshes
+    Mesh text_mesh = generateTextGeometryBuffer("Click to start", textratio, textwidth);
     unsigned int boxVAO  = generateBuffer(box);
     unsigned int padVAO  = generateBuffer(pad);
     unsigned int textVAO = generateBuffer(text_mesh);
@@ -196,11 +199,10 @@ void initialize_game(GLFWwindow* window) {
     // Construct scene
     rootNode = new SceneNode();
     skyBoxNode  = new Skybox();
-    terrainNode = new TexturedGeometry("terrain");
+    terrainNode = new FurLayer("terrain");
     broadTerrainNode = new TexturedGeometry("broad_terrain");
     padNode  = new TexturedGeometry();
-    rickyNode = new TexturedGeometry("ricky");
-    rickyFurNode = new FurLayer();
+    rickyFurNode = new FurLayer("ricky");
     padLightNode = new PointLight();
     topLeftLightNode = new PointLight();
     topRightLightNode = new PointLight();
@@ -218,8 +220,7 @@ void initialize_game(GLFWwindow* window) {
     rootNode->children.push_back(terrainNode);
     terrainNode->children.push_back(broadTerrainNode);
     rootNode->children.push_back(padNode);
-    rootNode->children.push_back(rickyNode);
-    rickyNode->children.push_back(rickyFurNode);
+    rootNode->children.push_back(rickyFurNode);
 
     // transparency nodes
     rootNode->children.push_back(textNode);
@@ -253,10 +254,6 @@ void initialize_game(GLFWwindow* window) {
     textNode->vertexArrayObjectID = textVAO;
     textNode->VAOIndexCount       = text_mesh.indices.size();
 
-    // reused meshes
-    rickyFurNode->vertexArrayObjectID = rickyNode->vertexArrayObjectID;
-    rickyFurNode->VAOIndexCount       = rickyNode->VAOIndexCount;
-
     // light positions
     topLeftLightNode->position = { -85, 30, -120};
     topRightLightNode->position = { 85, 30, -120};
@@ -267,22 +264,20 @@ void initialize_game(GLFWwindow* window) {
     // geometry positions
     textNode->position = { DEFAULT_WINDOW_WIDTH/2 - textwidth/2, DEFAULT_WINDOW_HEIGHT/2, 0};
 
-    rickyNode->position = {-50, 20, -90};
+    rickyFurNode->position = {-50, 20, -90};
 
     skyBoxNode->position = {0, 0, 0 };
 
-    terrainNode->position = {0, -15, 0};
-    broadTerrainNode->position = {0, -0.4, 0};
+    terrainNode->position = {0, 0, 0};
+    broadTerrainNode->position = {0, 40, 0};
+
+    terrainNode->strand_length = 25;
 
     // texture IDs
     textNode->textureID = charmap_id;
     padNode->normalMapID = paddle_normal_id;
     padNode->textureID = paddle_diffuse_id;
     padNode->roughnessID = paddle_roughness_id;
-    rickyFurNode->furID = ricky_fur_texture_id;
-    rickyFurNode->normalMapID = ricky_fur_normal_id;
-    rickyFurNode->textureID = rickyNode->textureID;
-    rickyFurNode->roughnessID = rickyNode->roughnessID;
     turbulenceID = turbulence_id;
     skyBoxNode->textureID = skybox_id;
 
@@ -436,7 +431,7 @@ void updateFrame(GLFWwindow* window) {
     VP = glm::translate(VP, cameraPosition);
 
     // Move and rotate various SceneNodes
-    rickyNode->rotation = {0, 0.1*realTime, 0.01*realTime};
+    rickyFurNode->rotation = {0, 0.1*realTime, 0.01*realTime};
 
     glm::vec3 previous_boxDimensions = {180, 90, 90};
     glm::vec3 previous_boxPosition = { 0, -10, -80 };;
@@ -551,6 +546,7 @@ void Geometry::render() {
 
 
 void FurLayer::render() {
+    TexturedGeometry::render();
     if(vertexArrayObjectID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
@@ -558,8 +554,9 @@ void FurLayer::render() {
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
         glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
         glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
-        glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, normalMapID);
+        glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, furNormalMapID);
         glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
         glBindTextureUnit(FUR_FUR_SAMPLER, furID);
         glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
