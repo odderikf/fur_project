@@ -22,6 +22,7 @@ else()
 endif()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC __DEBUG__)
     if (MSVC)
     else()
         target_compile_options(${PROJECT_NAME} PRIVATE -g -rdynamic -Wall -Wextra -Wpedantic -O0)

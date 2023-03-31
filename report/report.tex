@@ -1,0 +1,72 @@
+\documentclass[a4paper, 12pt]{article}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{mathptmx}
+\usepackage{graphicx}
+\usepackage[T1]{fontenc}
+\usepackage[section]{placeins}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{enumitem}
+\usepackage{amsfonts}
+\usepackage{ulem}
+\usepackage{blindtext}
+
+\graphicspath{ {./images/} }
+
+% Set left margin - The default is 1 inch, so the following
+% command sets a 1.25-inch left margin.
+\setlength{\oddsidemargin}{-0.25in}
+
+% Set width of the text - What is left will be the right margin.
+% In this case, right margin is 8.5in - 1.25in - 6in = 1.25in.
+\setlength{\textwidth}{6.25in}
+
+% Set top margin - The default is 1 inch, so the following
+% command sets a 0.75-inch top margin.
+\setlength{\topmargin}{-0.25in}
+
+% Set height of the text - What is left will be the bottom margin.
+% In this case, bottom margin is 11in - 0.75in - 9.5in = 0.75in
+\setlength{\textheight}{8in}
+
+
+\lstset{
+    numberstyle=\tiny\color{gray},
+    keywordstyle=\color{blue},
+    commentstyle=\color{darkgray},
+    stringstyle=\color{pink},
+    tabsize=4,
+    breaklines=true,
+    breakatwhitespace=true,
+    language=Oz
+}
+
+\pagestyle{fancy}
+\headheight 29pt
+\fancyhf{}
+\rhead{Odd-Erik Frantzen}
+\lhead{
+    \raisebox{-0.33\height}{\includegraphics[height=2em]{logo}}
+    Assignment 2 TDT4230
+}
+\rfoot{Page \thepage \hspace{1pt} of~\pageref{LastPage}}
+
+\newenvironment{QandA}{\begin{enumerate}[label=\bfseries\alph*)]\bfseries}
+{\end{enumerate}}
+\newenvironment{answered}{\par\normalfont}{}
+
+% Document
+\title{Fur rendering with shells, fins, and order-independent transparency}
+\date{2023\\ April}
+\author{Odd-Erik Frantzen}
+\begin{document}
+    \maketitle
+    \section{Introduction}
+    % todo
+    Dynamic fur rendering, possibly a dog petting sim. I've previously used a geometry shader, along with a fur direction texture (akin to a flow map?) and a dot texture/noise texture to render static fur with the shell method.
+    I'd like to polish it up, and add features like interaction or swaying in the wind.
+    Order-independent transparency could be useful for this, to prevent self-occlusion from transparent elements rendered in the wrong order. More fragment processing could also help to give the fur more accurate shading, aliasing, and self-shadowing. I could also mix and match a few new techniques in, like billboards, fins, fur cards, etc, to cover more LODs, angles, and such.
+    Could subsurface-scattering help too?
+
+\end{document}

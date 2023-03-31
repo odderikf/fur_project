@@ -10,17 +10,18 @@ in layout(location = 0) vec3 normal_in;
 in layout(location = 1) vec2 textureCoordinates;
 in layout(location = 2) vec3 world_pos;
 in layout(location = 3) vec3 tangent_in;
-in layout(location = 4) float alpha;
 
 uniform layout(location = 1) mat3 normal_matrix;
 uniform layout(location = 2) vec3 campos;
 uniform PointLightSource point_light_sources[point_light_sources_len];
 uniform layout(location = 5) vec3 ball_position;
+uniform layout(location = 6) bool enable_nmap;
+uniform layout(location = 7) int pass_type;
 
 layout(binding = 0) uniform sampler2D tex;
 layout(binding = 1) uniform sampler2D normal_map;
 layout(binding = 2) uniform sampler2D roughness_map;
-layout(binding = 4) uniform sampler2D turbulence;
+
 
 layout (location = 0) out vec4 accumulation;
 layout (location = 1) out float revealage;
@@ -42,31 +43,37 @@ float sigmoid(float x){
 void main()
 {
     vec4 color;
+    // set defaults
+    float mat_shine = 16;
+    vec3 normal = normalize(normal_in);
     vec3 mat_diff = vec3(1.,1.,1.);
     vec3 mat_spec = vec3(1.,1.,1.);
+    vec4 frag_color = vec4(1.,1.,1., 1.);
 
-    // get the texture color.
-    vec4 frag_color = texture(tex, textureCoordinates);
-    // Find strand point visibility, turbulence texture gives the fur strands.
-    color.a = frag_color.a * alpha * texture(turbulence, textureCoordinates).a;
+    // if this model uses textures
+    if (enable_nmap) { // todo rename variable?
+        // get the texture color
+        frag_color = texture(tex, textureCoordinates);
+        if (frag_color.a == 0) discard;
+        // get the roughness, how unshiny it is
+        float roughness = texture(roughness_map, textureCoordinates).x;
+        mat_shine = (5.f/(roughness*roughness));
 
-    float roughness = texture(roughness_map, textureCoordinates).x;
-    float mat_shine = (5.f/(roughness*roughness));
+        // find transform from tangent-space to world-space
+        vec3 tangent = normalize(tangent_in);
+        vec3 bitangent = cross(normal, tangent);
+        mat3 TBN = mat3(
+            tangent,
+            bitangent,
+            normal
+        );
 
-    // find transform from tangent-space to world-space
-    vec3 normal = normalize(normal_in);
-    vec3 tangent = normalize(tangent_in);
-    vec3 bitangent = cross(normal, tangent);
-    mat3 TBN = mat3(
-        tangent,
-        bitangent,
-        normal
-    );
+        // find world-space normal from normal map in tangent-space
+        normal = texture(normal_map, textureCoordinates).xyz * 2 - 1;
+        normal = normalize(normal);
+        normal = TBN * normal;
+    }
 
-    // find world-space normal from normal map in tangent-space
-    normal = texture(normal_map, textureCoordinates).xyz * 2 - 1;
-    normal = normalize(normal);
-    normal = TBN * normal;
 
     // find ball shadow data
     float ball_radius = 3.;
@@ -123,7 +130,6 @@ void main()
         float spec_dot = max(0, dot(reflected, cam_dir));
         spec_dot = pow(spec_dot, mat_shine);
         vec3 specular_term = mat_spec * spec_dot * spec_intensity;
-        //        intensity += ball_rejectance*per_light_intensity(light_dir, light_intensity, normal, mat_shine);
 
         // add a little specular to colored intensity,
         // add most of it to reflective intensity
@@ -135,12 +141,11 @@ void main()
     intensity.r = min(1., intensity.r);
     intensity.g = min(1., intensity.g);
     intensity.b = min(1., intensity.b);
+    color.a = frag_color.a;
     color.rgb = intensity * frag_color.xyz + reflective_intensity + dither(textureCoordinates);
-
     accumulation = color;
     float weight = clamp(pow(min(1.0, color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
     accumulation.rgb *= color.a;
     accumulation *= weight;
     revealage = color.a;
-
 }

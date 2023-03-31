@@ -41,13 +41,16 @@ PointLight* sunNode; // todo dirlight
 FlatGeometry* textNode;
 
 CompositorNode *compositeNode;
-GLuint first_pass_fb;
-GLuint first_pass_tex;
+GLuint semitransparent_pass_fb;
+GLuint oit_accum_tex;
+GLuint oit_reveal_tex;
+GLuint oit_depth_buffer;
 
 double ballRadius = 3.0f;
 
 // These are heap allocated, because they should not be initialised at the start of the program
 Gloom::Shader* lighting_shader;
+Gloom::Shader* oit_lighting_shader;
 Gloom::Shader* flat_geometry_shader;
 Gloom::Shader* fur_shader;
 Gloom::Shader* skybox_shader;
@@ -61,6 +64,9 @@ glm::mat4 VP;
 
 GLint uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 GLint uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+
+GLint uniform_oit_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+GLint uniform_oit_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 
 GLint fur_uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 GLint fur_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
@@ -131,7 +137,7 @@ GLuint create_texture(const std::string &filename) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex.width, tex.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex.pixels.data());
     glGenerateMipmap(GL_TEXTURE_2D);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     return tex_id;
 }
 
@@ -147,43 +153,78 @@ FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
     furID = create_texture(filebase + "_fur.png");
     furNormalMapID = create_texture(filebase + "_fur_nrm.png");
 }
+void GLAPIENTRY
+MessageCallback( GLenum source,
+                 GLenum type,
+                 GLuint id,
+                 GLenum severity,
+                 GLsizei length,
+                 const GLchar* message,
+                 const void* userParam )
+{
+    std::cerr << "GL CALLBACK: " <<
+    "source: " << source <<
+    " type:" << type <<
+    " id: " << id <<
+    " severity: " << severity <<
+    " length: " << length <<
+    " message: " << message << std::endl;
 
+}
 void initialize_game(GLFWwindow* window) {
-
+#ifdef __DEBUG__
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(MessageCallback, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DEBUG_TYPE_OTHER , GL_DONT_CARE, 0, nullptr, false);
+#endif
     // gl settings
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
 
-    glClearColor(0.f, 0.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glfwSwapBuffers(window);
 
     // set up first pass frame buffer
-    glGenFramebuffers(1, &first_pass_fb);
-    glBindFramebuffer(GL_FRAMEBUFFER, first_pass_fb);
+    glGenFramebuffers(1, &semitransparent_pass_fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, semitransparent_pass_fb);
 
     // texture output
-    glGenTextures(1, &first_pass_tex);
-    glBindTexture(GL_TEXTURE_2D, first_pass_tex);
+    glGenTextures(1, &oit_accum_tex);
+    glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
-                                0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, first_pass_tex, 0);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); todo remove?
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, oit_accum_tex, 0);
+
+    // texture output
+    glGenTextures(1, &oit_reveal_tex);
+    glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                 0, GL_RED, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, oit_reveal_tex, 0);
+
+
+    const GLenum dbs[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+    glDrawBuffers(2, dbs);
 
     // depth buffer
-    unsigned int rbo;
-    glGenRenderbuffers(1, &rbo);
-    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glGenRenderbuffers(1, &oit_depth_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, oit_depth_buffer);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, oit_depth_buffer);
 
     // its own clear color
-    glClearColor(1.f, 0.0f, 1.0f, 1.0f);
+    glClearColor(1.f, 0.0f, 1.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
@@ -193,6 +234,11 @@ void initialize_game(GLFWwindow* window) {
     lighting_shader = new Gloom::Shader();
     lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/simple.frag");
     lighting_shader->activate();
+
+    // oit pass shader (phong)
+    oit_lighting_shader = new Gloom::Shader();
+    oit_lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/oit.frag");
+    oit_lighting_shader->activate();
 
     // text / UI / 2d shader
     flat_geometry_shader = new Gloom::Shader();
@@ -260,6 +306,7 @@ void initialize_game(GLFWwindow* window) {
     padNode->normalMapID = create_texture("../res/textures/paddle_nrm.png");
     padNode->textureID   = create_texture("../res/textures/paddle_col.png");
     padNode->roughnessID = create_texture("../res/textures/paddle_rgh.png");
+    padNode->render_pass = SEMITRANSPARENT;
 
     turbulenceID = create_texture("../res/textures/turbulence.png");
 
@@ -276,6 +323,19 @@ void initialize_game(GLFWwindow* window) {
 
     // transparency nodes
     rootNode->children.push_back(textNode);
+
+    TexturedGeometry *pch1 = new TexturedGeometry();
+    TexturedGeometry *pch2 = new TexturedGeometry();
+    TexturedGeometry *pch3 = new TexturedGeometry();
+    pch1->textureID = pch2->textureID = pch3->textureID = padNode->textureID;
+    pch1->roughnessID = pch2->roughnessID = pch3->roughnessID = padNode->roughnessID;
+    pch1->normalMapID = pch2->normalMapID = pch3->normalMapID = padNode->normalMapID;
+    pch1->position = pch2->position = pch3->position = {0, -5, 0};
+    pch1->rotation = pch2->rotation = pch3->rotation = {1, 1, 0};
+    pch1->render_pass = pch2->render_pass = pch3->render_pass = padNode->render_pass;
+    padNode->children.push_back(pch1);
+    pch1->children.push_back(pch2);
+    pch2->children.push_back(pch3);
 
     int which_lights = 0;
 
@@ -305,6 +365,9 @@ void initialize_game(GLFWwindow* window) {
 
     textNode->vertexArrayObjectID = textVAO;
     textNode->VAOIndexCount       = text_mesh.indices.size();
+
+    pch1->vertexArrayObjectID = pch2->vertexArrayObjectID = pch3->vertexArrayObjectID = padNode->vertexArrayObjectID;
+    pch1->VAOIndexCount = pch2->VAOIndexCount = pch3->VAOIndexCount = padNode->VAOIndexCount;
 
     Mesh compositeMesh;
     compositeMesh.vertices = {{-1,-1,0.5}, {1,-1,0.5}, {-1,1,0.5}, {1,1,0.5}};
@@ -350,7 +413,7 @@ void initialize_game(GLFWwindow* window) {
     padLightNode->lightColor = {0., 0., 1.};
 
     sunNode->lightColor = {1, 1, 0.5};
-    sunNode->lightColor *= 1000;
+    sunNode->lightColor *= 2000;
 
     whiteLightNode->lightColor = {0.9, 0.9, 0.9};
 
@@ -367,6 +430,14 @@ void initialize_game(GLFWwindow* window) {
         std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
         uniform_light_sources_color_loc[node->lightID] = lighting_shader->getUniformFromName(collocname);
+    }
+    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
+        std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
+                                             UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
+        uniform_oit_light_sources_position_loc[node->lightID] = oit_lighting_shader->getUniformFromName(poslocname);
+        std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
+                                             UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
+        uniform_oit_light_sources_color_loc[node->lightID] = oit_lighting_shader->getUniformFromName(collocname);
     }
     // do it again for the fur shader
     for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
@@ -508,21 +579,29 @@ void updateFrame(GLFWwindow* window) {
     lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
+    oit_lighting_shader->activate();
+    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
+//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
     fur_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
-    skybox_shader->activate();
-    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
+
+//    skybox_shader->activate();
+//    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
 
 }
 
 void PointLight::update(glm::mat4 transformationThusFar) {
     // find total position in graph by model matrix
-    lighting_shader->activate();
     glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
+
+    lighting_shader->activate();
     glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    oit_lighting_shader->activate();
+    glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     fur_shader->activate();
     glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
@@ -531,10 +610,14 @@ void PointLight::update(glm::mat4 transformationThusFar) {
 
 void DirLight::update(glm::mat4 transformationThusFar) {
     // find total position in graph by model matrix
-    lighting_shader->activate();
     glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
+
+    lighting_shader->activate();
     glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    oit_lighting_shader->activate();
+    glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     fur_shader->activate();
     glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
@@ -557,31 +640,28 @@ void SceneNode::update(glm::mat4 transformationThusFar) {
     }
 }
 
-void CompositorNode::render() {
-    if(vertexArrayObjectID != -1) {
+void CompositorNode::render(render_type pass) {
+    if(render_pass == pass && vertexArrayObjectID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
         composite_shader->activate();
-        glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
-        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
-        glBindTextureUnit(0, first_pass_tex); // todo define
+        glBindTextureUnit(ACCUMULATION_SAMPLER, oit_accum_tex);
+        glBindTextureUnit(REVEALANCE_SAMPLER, oit_reveal_tex);
 
         glBindVertexArray(vertexArrayObjectID);
         glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
     }
 }
 
-void SceneNode::render() {
+void SceneNode::render(render_type pass) {
     for(SceneNode* child : children) {
-        child->render();
+        child->render(pass);
     }
 }
 
-void Skybox::render() {
-    if(vertexArrayObjectID != -1) {
+void Skybox::render(render_type pass) {
+    if(render_pass == pass && vertexArrayObjectID != -1) {
         glm::mat4 mvp = VP; // no model
         // undo camera translation
         mvp = glm::translate(mvp, -cameraPosition); // todo use existing matrices instead?
@@ -592,15 +672,16 @@ void Skybox::render() {
         glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
-        child->render();
+        child->render(pass);
     }
 }
 
-void Geometry::render() {
-    if(vertexArrayObjectID != -1) {
+void Geometry::render(render_type pass) {
+    if(render_pass == pass && vertexArrayObjectID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        lighting_shader->activate();
+        if(render_pass == SEMITRANSPARENT) oit_lighting_shader->activate();
+        else lighting_shader->activate();
         glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
@@ -609,39 +690,44 @@ void Geometry::render() {
         glBindVertexArray(vertexArrayObjectID);
         glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
     }
-    SceneNode::render();
+    SceneNode::render(pass);
 }
 
 
-void FurLayer::render() {
-    TexturedGeometry::render();
+void FurLayer::render(render_type pass) {
     if(vertexArrayObjectID != -1) {
-        glm::mat4 mvp = VP * modelTF;
-        glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        fur_shader->activate();
-        glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
-        glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
-        glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-        glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
-        glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
-        glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, furNormalMapID);
-        glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
-        glBindTextureUnit(FUR_FUR_SAMPLER, furID);
-        glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
+        if (render_pass == pass){
+            glm::mat4 mvp = VP * modelTF;
+            glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+            fur_shader->activate();
+            glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+            glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+            glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+            glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
+            glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, furNormalMapID);
+            glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
+            glBindTextureUnit(FUR_FUR_SAMPLER, furID);
+            glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
 
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(vertexArrayObjectID);
+            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        } else if (pass == OPAQUE) {
+            // draw base in opaque pass
+            TexturedGeometry::render(OPAQUE);
+        }
     }
     for(SceneNode* child : children) {
-        child->render();
+        child->render(pass);
     }
 }
 
-void TexturedGeometry::render() {
-    if(vertexArrayObjectID != -1) {
+void TexturedGeometry::render(render_type pass) {
+    if(render_pass == pass && vertexArrayObjectID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        lighting_shader->activate();
+        if(render_pass == SEMITRANSPARENT) oit_lighting_shader->activate();
+        else lighting_shader->activate();
         glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
@@ -654,12 +740,12 @@ void TexturedGeometry::render() {
         glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
-        child->render();
+        child->render(pass);
     }
 }
 
-void FlatGeometry::render() {
-    if(vertexArrayObjectID != -1) {
+void FlatGeometry::render(render_type pass) {
+    if(render_pass == pass && vertexArrayObjectID != -1) {
         flat_geometry_shader->activate();
         glm::mat4 ortho = glm::ortho(0.f, (float)DEFAULT_WINDOW_WIDTH, 0.f, (float)DEFAULT_WINDOW_HEIGHT, -1.f, 1.f);
         ortho = ortho * modelTF;
@@ -670,7 +756,7 @@ void FlatGeometry::render() {
         glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
-        child->render();
+        child->render(pass);
     }
 }
 
@@ -679,14 +765,44 @@ void renderFrame(GLFWwindow* window) {
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
 
-    glEnable(GL_BLEND);
-    glBindFramebuffer(GL_FRAMEBUFFER, first_pass_fb);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LEQUAL);
+    glDepthMask(GL_TRUE);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    rootNode->render();
+    rootNode->render(OPAQUE);
 
-    glDisable(GL_BLEND);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, semitransparent_pass_fb);
+
+    GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+
+    glDepthMask(GL_FALSE);
+    glm::vec4 accum_clear(0.,0.,0.,0.);
+    glClearBufferfv(GL_COLOR, 0, glm::value_ptr(accum_clear));
+    glBlendFunci(0, GL_ONE, GL_ONE);
+
+    glm::vec4 reveal_clear(1.,0.,0.,0.);
+    glClearBufferfv(GL_COLOR, 1, glm::value_ptr(reveal_clear));
+    glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+    glBlendEquation(GL_FUNC_ADD);
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    compositeNode->render();
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                      0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                      GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    glDrawBuffers(2, bufs);
+    rootNode->render(SEMITRANSPARENT);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDepthFunc(GL_ALWAYS);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
+    compositeNode->render(OPAQUE);
+    rootNode->render(UI);
 }

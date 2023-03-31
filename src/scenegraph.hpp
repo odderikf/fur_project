@@ -6,6 +6,12 @@
 #include <glad/glad.h>
 #include <string>
 
+enum render_type {
+    OPAQUE = 0,
+    SEMITRANSPARENT = 1,
+    UI = 2
+};
+
 class SceneNode {
 public:
 	SceneNode() {
@@ -32,8 +38,10 @@ public:
 	// The location of the node's reference point
 	glm::vec3 referencePoint;
 
+    render_type render_pass = OPAQUE;
 
-    virtual void render();
+
+    virtual void render(render_type pass);
 
     virtual void update(glm::mat4 transformationThusFar);
 };
@@ -45,23 +53,22 @@ public:
     GLsizei VAOIndexCount = 0;
     Geometry() : SceneNode() {}
     explicit Geometry(const std::string &objname);
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class TexturedGeometry : public Geometry {
 public:
-
     GLuint roughnessID = 0;
     GLuint normalMapID = 0;
     TexturedGeometry() : Geometry() {}
     explicit TexturedGeometry(const std::string &objname);
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class Skybox : public Geometry {
 public:
     Skybox() : Geometry() {}
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class FurLayer : public TexturedGeometry {
@@ -69,16 +76,18 @@ public:
     GLuint furID = 0;
     GLuint furNormalMapID = 0;
     float strand_length = 2.5;
+    render_type render_pass = SEMITRANSPARENT;
     FurLayer() : TexturedGeometry() {}
     explicit FurLayer(const std::string &objname);
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class FlatGeometry : public Geometry {
 public:
+    render_type render_pass = UI;
     FlatGeometry() : Geometry() {}
     explicit FlatGeometry(const std::string &objname) : Geometry(objname) {};
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class LightNode : public SceneNode {
@@ -90,7 +99,7 @@ public:
 };
 class CompositorNode : public Geometry {
 public:
-    void render() override;
+    void render(render_type pass) override;
 };
 
 class PointLight : public LightNode {
