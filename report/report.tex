@@ -64,9 +64,44 @@
     \maketitle
     \section{Introduction}
     % todo
-    Dynamic fur rendering, possibly a dog petting sim. I've previously used a geometry shader, along with a fur direction texture (akin to a flow map?) and a dot texture/noise texture to render static fur with the shell method.
+    Dynamic fur rendering, possibly a dog petting sim.
+    I've previously used a geometry shader,
+    along with a fur direction texture (akin to a flow map?) and a dot texture/noise texture to render static fur with the shell method.
     I'd like to polish it up, and add features like interaction or swaying in the wind.
-    Order-independent transparency could be useful for this, to prevent self-occlusion from transparent elements rendered in the wrong order. More fragment processing could also help to give the fur more accurate shading, aliasing, and self-shadowing. I could also mix and match a few new techniques in, like billboards, fins, fur cards, etc, to cover more LODs, angles, and such.
+    Order-independent transparency could be useful for this, to prevent self-occlusion from transparent elements rendered in the wrong order.
+    More fragment processing could also help to give the fur more accurate shading, aliasing, and self-shadowing.
+    I could also mix and match a few new techniques in, like billboards, fins, fur cards, etc, to cover more LODs, angles, and such.
     Could subsurface-scattering help too?
+
+    \section{Weighted Blended Order-Independent Transparency}
+
+    Hair and fur notably have very fine detail, often sub-pixel,
+    and therefore frequently need some form of blending to avoid jittery aliasing.
+    Trying to depth sort hundreds or thousands of strands is of course, not trivial,
+    so I've gone for a form of order-independent shading.
+    Specifically, I've implemented a weighted order-independent 3-pass method,
+    where the first pass is plainly rendered opaque geometry,
+    the second pass does order-independent blending,
+    so no depth writing,
+    the blending function is just ones, fragment shader does blending weight,
+    of transparent geometry,
+    weighted by depth (and occluded by the first pass),
+    to its own framebuffer (accumulation),
+    along with a channel of "revealage", how much transparency remains for the opaque background.
+    The third pass just blends the accumulation into the main framebuffer.
+    There's technically a 4th pass after this to add UI elements.
+
+    This is based on the paper by Morgan McGuire and Louis Bavoil~\cite{Blending}
+
+
+    \section{Ref}
+    @article{Blending,
+    author = {Morgan McGuire and Louis Bavoil},
+    year = {2013},
+    title = {Weighted Blended Order-Independent Transparency},
+    publisher = {Journal of Computer Graphics Techniques (JCGT)},
+    edition = {vol. 2, no. 2}
+
+    }
 
 \end{document}

@@ -191,7 +191,7 @@ void initialize_game(GLFWwindow* window) {
     glGenFramebuffers(1, &semitransparent_pass_fb);
     glBindFramebuffer(GL_FRAMEBUFFER, semitransparent_pass_fb);
 
-    // texture output
+    // texture for blended transparency color accumulation
     glGenTextures(1, &oit_accum_tex);
     glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
@@ -202,7 +202,7 @@ void initialize_game(GLFWwindow* window) {
 //    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, oit_accum_tex, 0);
 
-    // texture output
+    // texture for blended real-alpha accumulation (as if using over)
     glGenTextures(1, &oit_reveal_tex);
     glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
@@ -393,6 +393,7 @@ void initialize_game(GLFWwindow* window) {
     broadTerrainNode->position = {0, 40, 0};
 
     terrainNode->strand_length = 25;
+//    rickyFurNode->strand_length = ?;
 
 
     // uniform array index IDs
@@ -765,6 +766,7 @@ void renderFrame(GLFWwindow* window) {
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
 
+    // draw opaque
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -773,6 +775,7 @@ void renderFrame(GLFWwindow* window) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     rootNode->render(OPAQUE);
 
+    // draw blended transparent
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, semitransparent_pass_fb);
 
     GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
@@ -795,6 +798,8 @@ void renderFrame(GLFWwindow* window) {
     glDrawBuffers(2, bufs);
     rootNode->render(SEMITRANSPARENT);
 
+
+    // composite transparent onto opaque
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDepthFunc(GL_ALWAYS);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -804,5 +809,7 @@ void renderFrame(GLFWwindow* window) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
     compositeNode->render(OPAQUE);
+
+    // add UI
     rootNode->render(UI);
 }
