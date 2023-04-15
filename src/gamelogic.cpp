@@ -270,7 +270,6 @@ void initialize_game(GLFWwindow* window) {
     // gen meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
     Mesh box = cube(boxDimensions, glm::vec2(90), true, true);
-    Mesh sphere = generateSphere(1.0, 40, 40);
 
     const float textwidth = 400;
     const float textratio = 1.34482759f;
@@ -392,8 +391,8 @@ void initialize_game(GLFWwindow* window) {
     terrainNode->position = {0, 0, 0};
     broadTerrainNode->position = {0, 40, 0};
 
-    terrainNode->strand_length = 25;
-//    rickyFurNode->strand_length = ?;
+    terrainNode->strand_length = 15;
+    rickyFurNode->strand_length = 1;
 
 
     // uniform array index IDs
@@ -455,14 +454,14 @@ void initialize_game(GLFWwindow* window) {
     std::cout << fmt::format("Initialized scene with {} SceneNodes.", totalChildren(rootNode)) << std::endl;
 
     std::cout << "Ready. Click to start!" << std::endl;
-    cameraPosition = glm::vec3(0, -20, -20);
+    cameraPosition = glm::vec3(0, 0, 0);
     cameraRotation = glm::vec3(0, 0, 0);
 }
 
 void updateFrame(GLFWwindow* window) {
 //    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); todo
 
-    double timeDelta = getTimeDeltaSeconds();
+    float timeDelta = getTimeDeltaSeconds();
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1)) {
         mouseLeftPressed = true;
@@ -579,7 +578,6 @@ void updateFrame(GLFWwindow* window) {
     rootNode->update(glm::identity<glm::mat4>());
     lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
-//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
     oit_lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 //    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
@@ -811,5 +809,5 @@ void renderFrame(GLFWwindow* window) {
     compositeNode->render(OPAQUE);
 
     // add UI
-    rootNode->render(UI);
+//    rootNode->render(UI);
 }

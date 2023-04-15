@@ -49,6 +49,7 @@ unsigned int generateBuffer(Mesh &mesh) {
 
         float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
         glm::vec3 tangent = (deltaPos2 * deltaUV1.y - deltaPos1 * deltaUV2.y  )*r;
+        tangent = glm::normalize(tangent);
         tangents.at(i) = tangents.at(i+1) = tangents.at(i+2) = tangent;
     }
 

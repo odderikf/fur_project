@@ -10,9 +10,10 @@ in layout(location = 1) vec2 textureCoordinates_in[3];
 in layout(location = 3) vec3 tangent_in[3];
 
 uniform layout(location = 1) mat3 normal_matrix;
+uniform layout(location = 2) vec3 campos;
 uniform layout(location = 3) mat4 MVP;
 uniform layout(location = 4) mat4 model;
-uniform layout(location = 6) float fur_strand_length;
+uniform layout(location = 8) float fur_strand_length;
 
 layout(binding = 3) uniform sampler2D fur_texture;
 
@@ -72,7 +73,12 @@ void main(){
     fur_dirs[2] = fur_texels[2].xyz * 2 - 1;
     fur_dirs[2] = normalize(TBNs[2] * fur_dirs[2]);
 
-    for(int i = 0; i < nlayers; ++i){
+    float camdist0 = length(gl_in[0].gl_Position.xyz - campos);
+    float camdist1 = length(gl_in[1].gl_Position.xyz - campos);
+    float camdist2 = length(gl_in[2].gl_Position.xyz - campos);
+    float camdist = min(min(camdist0, camdist1), camdist2);
+    int stepsize = 1 + int(camdist/(100*fur_strand_length));
+    for(int i = 0; i < nlayers; i = i + stepsize){
         float norm_i = float(i)/nlayers;
         float distance = fur_strand_length * norm_i;
 

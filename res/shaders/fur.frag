@@ -138,7 +138,18 @@ void main()
     color.rgb = intensity * frag_color.xyz + reflective_intensity + dither(textureCoordinates);
 
     accumulation = color;
-    float weight = clamp(pow(min(1.0, color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
+
+    // comments and formula from https://jcgt.org/published/0002/02/09/ presentation ppt
+    float color_resist = 0.05; // Increase if low-coverage foreground transparents are affecting background transparent color.
+    float range_adjust = 0.3; // Range adjustment to avoid saturating at the clamp bounds.
+    float zrange = 1000; //Depth range over which significant ordering discrimination is required. Here, 500 camera space units. Decrease if high-opacity surfaces seem “too transparent”, increase if distant transparents are blending together too much.
+    float ordering_strength = 32.0; // Ordering strength. Increase if background is showing through foreground too much.
+    float clampmin = 1e-3; // Min and max values expected to accumulate without under/overflow.
+    float clampmax = 3e4; // Here, tuned for 50 surfaces at float16 precision.
+    float epsilon = 1e-5; // don't divide by zero
+    float weight = pow(color.a, color_resist);
+    weight *= clamp(range_adjust / (epsilon + pow(gl_FragCoord.z / zrange, ordering_strength)), clampmin, clampmax);
+
     accumulation.rgb *= color.a;
     accumulation *= weight;
     revealage = color.a;
