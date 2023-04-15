@@ -44,29 +44,16 @@ void main()
     vec4 color;
     vec3 mat_diff = vec3(1.,1.,1.);
     vec3 mat_spec = vec3(1.,1.,1.);
+    vec3 normal = normalize(normal_in);
 
     // get the texture color.
     vec4 frag_color = texture(tex, textureCoordinates);
-    // Find strand point visibility, turbulence texture gives the fur strands.
-    color.a = frag_color.a * alpha * texture(turbulence, textureCoordinates).a;
+    color.a = frag_color.a * alpha;
 
-    float roughness = texture(roughness_map, textureCoordinates).x;
+    // hardcoded roughness location in texture
+    vec2 fin_roughness_uv = vec2(0.1,0.1);
+    float roughness = texture(roughness_map, fin_roughness_uv).x;
     float mat_shine = (5.f/(roughness*roughness));
-
-    // find transform from tangent-space to world-space
-    vec3 normal = normalize(normal_in);
-    vec3 tangent = normalize(tangent_in);
-    vec3 bitangent = cross(normal, tangent);
-    mat3 TBN = mat3(
-    tangent,
-    bitangent,
-    normal
-    );
-
-    // find world-space normal from normal map in tangent-space
-    normal = texture(normal_map, textureCoordinates).xyz * 2 - 1;
-    normal = normalize(normal);
-    normal = TBN * normal;
 
     // find ball shadow data
     float ball_radius = 3.;

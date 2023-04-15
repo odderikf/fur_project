@@ -75,6 +75,7 @@ class FurLayer : public TexturedGeometry {
 public:
     GLuint furID = 0;
     GLuint furNormalMapID = 0;
+    GLuint strandTextureID = 0;
     float strand_length = 2.5;
     render_type render_pass = SEMITRANSPARENT;
     FurLayer() : TexturedGeometry() {}

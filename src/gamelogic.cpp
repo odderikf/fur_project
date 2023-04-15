@@ -156,6 +156,7 @@ FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
     std::string filebase = "../res/textures/" + objname;
     furID = create_texture(filebase + "_fur.png");
     furNormalMapID = create_texture(filebase + "_fur_nrm.png");
+    strandTextureID = create_texture(filebase + "_fur_str.png");
 }
 void GLAPIENTRY
 MessageCallback( GLenum source,
@@ -722,6 +723,7 @@ void Geometry::render(render_type pass) {
 void FurLayer::render(render_type pass) {
     if(vertexArrayObjectID != -1) {
         if (render_pass == pass){
+            // draw shells of fur volume
             glm::mat4 mvp = VP * modelTF;
             glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
             fur_shell_shader->activate();
@@ -737,6 +739,21 @@ void FurLayer::render(render_type pass) {
 
             glBindVertexArray(vertexArrayObjectID);
             glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+
+            // draw silhouette fins
+            glDisable(GL_CULL_FACE);
+            fur_fin_shader->activate();
+            glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
+            glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
+            glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+            glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, strandTextureID);
+            glBindTextureUnit(FUR_FUR_SAMPLER, furID);
+
+            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+
+            glEnable(GL_CULL_FACE);
+
         } else if (pass == OPAQUE) {
             // draw base in opaque pass
             TexturedGeometry::render(OPAQUE);

@@ -1,7 +1,7 @@
 #version 430 core
 
 #define nlayers 20
-#define nvertices 60 // 3*nlayers
+#define nvertices 40 // 2*nlayers
 layout(triangles) in;
 layout(triangle_strip, max_vertices = nvertices) out;
 
@@ -27,24 +27,14 @@ float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
 
 void main(){
+    int edges[6] = {0,1, 1,2, 2,0};
+
+    vec4[3] view_space_pos;
+
     vec4 fur_texels[3];
     fur_texels[0] = texture(fur_texture, textureCoordinates_in[0]);
     fur_texels[1] = texture(fur_texture, textureCoordinates_in[1]);
     fur_texels[2] = texture(fur_texture, textureCoordinates_in[2]);
-
-    if (fur_texels[0].a < 0.02 && fur_texels[1].a < 0.02 && fur_texels[2].a < 0.02) {
-        return; // fur too short to bother
-    }
-
-    vec3 normals_out[3];
-    normals_out[0] = normalize(normal_matrix * normal_in[0]);
-    normals_out[1] = normalize(normal_matrix * normal_in[1]);
-    normals_out[2] = normalize(normal_matrix * normal_in[2]);
-
-    vec3 tangents_out[3];
-    tangents_out[0] = normalize(normal_matrix * tangent_in[0]);
-    tangents_out[1] = normalize(normal_matrix * tangent_in[1]);
-    tangents_out[2] = normalize(normal_matrix * tangent_in[2]);
 
     // translate tangent-space fur direction to model-space
     mat3 TBNs[3];
@@ -73,29 +63,67 @@ void main(){
     fur_dirs[2] = fur_texels[2].xyz * 2 - 1;
     fur_dirs[2] = normalize(TBNs[2] * fur_dirs[2]);
 
-    float camdist0 = length(gl_in[0].gl_Position.xyz - campos);
-    float camdist1 = length(gl_in[1].gl_Position.xyz - campos);
-    float camdist2 = length(gl_in[2].gl_Position.xyz - campos);
-    float camdist = min(min(camdist0, camdist1), camdist2);
-    int stepsize = 1 + int(camdist/(100*fur_strand_length));
-    for(int i = 0; i < nlayers; i = i + stepsize){
-        float norm_i = float(i)/nlayers;
-        float distance = fur_strand_length * norm_i;
+    vec4 left;
+    vec4 right;
+    for (int e = 0; e < 6; e += 2){
 
-        for(int j = 0; j < 3; ++j){
-            normal_out = normals_out[j];
-            tangent_out = tangents_out[j];
-            textureCoordinates_out = textureCoordinates_in[j];
 
-            vec4 displacement = fur_texels[j].a * distance * vec4(fur_dirs[j], 0);
+        int ileft = edges[e];
+        int iright = edges[e+1];
+        left = gl_in[ileft].gl_Position;
+        right = gl_in[iright].gl_Position;
 
-            gl_Position = gl_in[j].gl_Position + displacement;
-            world_pos_out = (model*gl_Position).xyz;
-            gl_Position = MVP * gl_Position;
-            alpha = 1. - norm_i*sqrt(norm_i);
 
-            EmitVertex();
+        vec4 centre = left + right;
+        centre /= 2.;
+        vec4 view_space_centre = MVP * centre;
+        vec4 world_space_centre = model * centre;
+
+        // find whether this is a silhouette edge
+        vec3 edge_normal = normal_in[ileft] +  normal_in[iright];
+        edge_normal = normalize(edge_normal);
+        vec3 world_normal = normal_matrix * edge_normal;
+        world_normal = normalize(world_normal);
+        vec3 to_camera = -campos - world_space_centre.xyz;
+        vec3 to_camera_dir = normalize(to_camera);
+
+        float camdot = dot(world_normal, to_camera_dir);
+        float abscamdot = abs(camdot);
+        float silhouette_tolerance = 0.4;
+        if(abscamdot < silhouette_tolerance){
+            float fadeout = (silhouette_tolerance-abscamdot);
+
+            float texture_strand_length = fur_texels[ileft].a + fur_texels[iright].a;
+            texture_strand_length /= 2;
+
+            // generate billboard
+            float local_strand_length = texture_strand_length * fur_strand_length;
+            vec4 displacement_dir = vec4(fur_dirs[ileft]+fur_dirs[iright], 0);
+            displacement_dir = normalize(displacement_dir);
+            vec4 positions[nvertices];
+            // culling disabled so don't need to worry about winding order
+            for(int i = 0; i < nlayers; ++i){
+                float norm_i = float(i)/nlayers;
+                float distance = local_strand_length * norm_i;
+                alpha = 1. - norm_i*sqrt(norm_i);
+                alpha *= fadeout; // fade in silhouette
+                tangent_out = vec3(0); // not used;
+                normal_out = to_camera_dir;
+
+                textureCoordinates_out = vec2(0, norm_i);
+                gl_Position = left + distance * displacement_dir;
+                world_pos_out = (model*gl_Position).xyz;
+                gl_Position = MVP * gl_Position;
+                EmitVertex();
+
+                textureCoordinates_out = vec2(1, norm_i);
+                gl_Position = right + distance * displacement_dir;
+                world_pos_out = (model*gl_Position).xyz;
+                gl_Position = MVP * gl_Position;
+                EmitVertex();
+            }
+            EndPrimitive();
         }
-        EndPrimitive();
     }
+
 }
