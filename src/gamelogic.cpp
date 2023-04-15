@@ -52,7 +52,8 @@ double ballRadius = 3.0f;
 Gloom::Shader* lighting_shader;
 Gloom::Shader* oit_lighting_shader;
 Gloom::Shader* flat_geometry_shader;
-Gloom::Shader* fur_shader;
+Gloom::Shader* fur_shell_shader;
+Gloom::Shader* fur_fin_shader;
 Gloom::Shader* skybox_shader;
 Gloom::Shader* composite_shader;
 
@@ -68,8 +69,11 @@ GLint uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 GLint uniform_oit_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 GLint uniform_oit_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 
-GLint fur_uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
-GLint fur_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+GLint fur_shell_uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+GLint fur_shell_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+
+GLint fur_fin_uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
+GLint fur_fin_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 
 unsigned int turbulenceID;
 
@@ -245,13 +249,21 @@ void initialize_game(GLFWwindow* window) {
     flat_geometry_shader->makeBasicShader("../res/shaders/flat_geom.vert", "../res/shaders/flat_geom.frag");
     flat_geometry_shader->activate();
 
-    // Fur shell geometry shader todo fins?
-    fur_shader = new Gloom::Shader();
-    fur_shader->attach("../res/shaders/fur.vert");
-    fur_shader->attach("../res/shaders/fur.frag");
-    fur_shader->attach("../res/shaders/fur.geom");
-    fur_shader->link();
-    fur_shader->activate();
+    // Fur shell geometry shader
+    fur_shell_shader = new Gloom::Shader();
+    fur_shell_shader->attach("../res/shaders/fur.vert");
+    fur_shell_shader->attach("../res/shaders/fur_shell.frag");
+    fur_shell_shader->attach("../res/shaders/fur_shell.geom");
+    fur_shell_shader->link();
+    fur_shell_shader->activate();
+
+    // Fur fin geometry shader
+    fur_fin_shader = new Gloom::Shader();
+    fur_fin_shader->attach("../res/shaders/fur.vert");
+    fur_fin_shader->attach("../res/shaders/fur_fin.frag");
+    fur_fin_shader->attach("../res/shaders/fur_fin.geom");
+    fur_fin_shader->link();
+    fur_fin_shader->activate();
 
     // shader for position invariant skybox
     skybox_shader = new Gloom::Shader();
@@ -443,10 +455,18 @@ void initialize_game(GLFWwindow* window) {
     for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
-        fur_uniform_light_sources_position_loc[node->lightID] = fur_shader->getUniformFromName(poslocname);
+        fur_shell_uniform_light_sources_position_loc[node->lightID] = fur_shell_shader->getUniformFromName(poslocname);
         std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
-        fur_uniform_light_sources_color_loc[node->lightID] = fur_shader->getUniformFromName(collocname);
+        fur_shell_uniform_light_sources_color_loc[node->lightID] = fur_shell_shader->getUniformFromName(collocname);
+    }
+    for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
+        std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
+                                             UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
+        fur_fin_uniform_light_sources_position_loc[node->lightID] = fur_fin_shader->getUniformFromName(poslocname);
+        std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
+                                             UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
+        fur_fin_uniform_light_sources_color_loc[node->lightID] = fur_fin_shader->getUniformFromName(collocname);
     }
 
     getTimeDeltaSeconds();
@@ -580,10 +600,10 @@ void updateFrame(GLFWwindow* window) {
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
     oit_lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
-//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
-    fur_shader->activate();
+    fur_shell_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
-//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
+    fur_fin_shader->activate();
+    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 
 //    skybox_shader->activate();
 //    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
@@ -601,9 +621,12 @@ void PointLight::update(glm::mat4 transformationThusFar) {
     oit_lighting_shader->activate();
     glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
-    fur_shader->activate();
-    glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
-    glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_shell_shader->activate();
+    glUniform3fv(fur_shell_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_shell_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_fin_shader->activate();
+    glUniform3fv(fur_fin_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_fin_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     SceneNode::update(transformationThusFar);
 }
 
@@ -617,9 +640,12 @@ void DirLight::update(glm::mat4 transformationThusFar) {
     oit_lighting_shader->activate();
     glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
-    fur_shader->activate();
-    glUniform3fv(fur_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
-    glUniform3fv(fur_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_shell_shader->activate();
+    glUniform3fv(fur_shell_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_shell_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
+    fur_fin_shader->activate();
+    glUniform3fv(fur_shell_uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
+    glUniform3fv(fur_shell_uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     SceneNode::update(transformationThusFar);
 }
 void SceneNode::update(glm::mat4 transformationThusFar) {
@@ -698,7 +724,7 @@ void FurLayer::render(render_type pass) {
         if (render_pass == pass){
             glm::mat4 mvp = VP * modelTF;
             glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-            fur_shader->activate();
+            fur_shell_shader->activate();
             glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
             glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
