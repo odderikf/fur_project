@@ -1,6 +1,19 @@
 # Erik's Fur Shader
 
 
+# Compile and Run
+
+    mkdir build
+    cd build
+    cmake ..
+    make
+    ./fur_project
+
+Or similar on windows with cmake set up for MSVC.
+
+Visual Studio CMake works
+
+I use CLion with MSVC
 
 # Attribution
 
