@@ -13,6 +13,7 @@ uniform layout(location = 1) mat3 normal_matrix;
 uniform layout(location = 2) vec3 campos;
 uniform layout(location = 3) mat4 MVP;
 uniform layout(location = 4) mat4 model;
+uniform layout(location = 7) vec3 wind;
 uniform layout(location = 8) float fur_strand_length;
 
 layout(binding = 3) uniform sampler2D fur_texture;

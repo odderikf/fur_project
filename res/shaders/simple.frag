@@ -21,7 +21,7 @@ layout(binding = 0) uniform sampler2D tex;
 layout(binding = 1) uniform sampler2D normal_map;
 layout(binding = 2) uniform sampler2D roughness_map;
 
-out vec4 color;
+layout(location = 0) out vec4 color;
 
 float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }

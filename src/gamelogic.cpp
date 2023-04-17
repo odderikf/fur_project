@@ -43,6 +43,7 @@ FlatGeometry* textNode;
 CompositorNode *compositeNode;
 GLuint semitransparent_pass_fb;
 GLuint oit_accum_tex;
+GLuint oit_modulation_tex;
 GLuint oit_reveal_tex;
 GLuint oit_depth_buffer;
 
@@ -95,6 +96,8 @@ double lastMouseY = DEFAULT_WINDOW_HEIGHT / 2;
 
 glm::vec3 cameraPosition = glm::vec3(0, 2, -20);
 glm::vec3 cameraRotation = glm::vec3(0, 0, 0);
+
+glm::vec3 wind = glm::vec3(0,0,0);
 
 void mouseCallback(GLFWwindow* window, double x, double y) {
     int windowWidth, windowHeight;
@@ -157,6 +160,7 @@ FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
     furID = create_texture(filebase + "_fur.png");
     furNormalMapID = create_texture(filebase + "_fur_nrm.png");
     strandTextureID = create_texture(filebase + "_fur_str.png");
+    furTurbulenceID = create_texture(filebase + "_fur_tur.png");
 }
 void GLAPIENTRY
 MessageCallback( GLenum source,
@@ -196,31 +200,36 @@ void initialize_game(GLFWwindow* window) {
     glGenFramebuffers(1, &semitransparent_pass_fb);
     glBindFramebuffer(GL_FRAMEBUFFER, semitransparent_pass_fb);
 
-    // texture for blended transparency color accumulation
-    glGenTextures(1, &oit_accum_tex);
-    glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
+    // texture for opaque pass and color modulation
+    glGenTextures(1, &oit_modulation_tex);
+    glBindTexture(GL_TEXTURE_2D, oit_modulation_tex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
                  0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); todo remove?
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, oit_accum_tex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, oit_modulation_tex, 0);
+
+    // texture for blended transparency color accumulation
+    glGenTextures(1, &oit_accum_tex);
+    glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, oit_accum_tex, 0);
 
     // texture for blended real-alpha accumulation (as if using over)
     glGenTextures(1, &oit_reveal_tex);
     glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R16F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
                  0, GL_RED, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, oit_reveal_tex, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, oit_reveal_tex, 0);
 
 
-    const GLenum dbs[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-    glDrawBuffers(2, dbs);
+    const GLenum dbs[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+    glDrawBuffers(3, dbs);
 
     // depth buffer
     glGenRenderbuffers(1, &oit_depth_buffer);
@@ -228,12 +237,8 @@ void initialize_game(GLFWwindow* window) {
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, oit_depth_buffer);
 
-    // its own clear color
-    glClearColor(1.f, 0.0f, 1.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-    glfwSetCursorPosCallback(window, mouseCallback);
+//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+//    glfwSetCursorPosCallback(window, mouseCallback);
 
     // general shader (phong)
     lighting_shader = new Gloom::Shader();
@@ -319,8 +324,6 @@ void initialize_game(GLFWwindow* window) {
     padNode->textureID   = create_texture("../res/textures/paddle_col.png");
     padNode->roughnessID = create_texture("../res/textures/paddle_rgh.png");
     padNode->render_pass = SEMITRANSPARENT;
-
-    turbulenceID = create_texture("../res/textures/turbulence.png");
 
     skyBoxNode->textureID = create_cubemap("../res/textures/skybox/");
 
@@ -548,6 +551,12 @@ void updateFrame(GLFWwindow* window) {
 
     realTime += timeDelta;
 
+    wind = glm::vec3(
+        rand()/RAND_MAX+0.4*glm::sin((2*realTime)),
+        0,
+        0
+    );
+
     glm::mat4 projection = glm::perspective(
         glm::radians(80.0f),
         float(DEFAULT_WINDOW_WIDTH) / float(DEFAULT_WINDOW_HEIGHT), //todo dynamic aspect
@@ -728,11 +737,13 @@ void FurLayer::render(render_type pass) {
             glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
             glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            glUniform3fv(UNIFORM_WIND_LOC, 1, glm::value_ptr(wind));
+
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
             glBindTextureUnit(SIMPLE_NORMAL_SAMPLER, furNormalMapID);
             glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
-            glBindTextureUnit(FUR_TURBULENCE_SAMPLER, turbulenceID);
+            glBindTextureUnit(FUR_TURBULENCE_SAMPLER, furTurbulenceID);
 
             glBindVertexArray(vertexArrayObjectID);
             glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
@@ -747,6 +758,7 @@ void FurLayer::render(render_type pass) {
             glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
             glUniform1f(UNIFORM_FUR_LENGTH_LOC, fin_strand_length_fac*strand_length);
+            glUniform3fv(UNIFORM_WIND_LOC, 1, glm::value_ptr(wind));
 
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, strandTextureID);
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
@@ -808,49 +820,69 @@ void renderFrame(GLFWwindow* window) {
     glfwGetWindowSize(window, &windowWidth, &windowHeight);
     glViewport(0, 0, windowWidth, windowHeight);
 
-    // draw opaque
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // clear fb
+    glBindFramebuffer(GL_FRAMEBUFFER, semitransparent_pass_fb);
+
+    GLenum bufs[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+    glDrawBuffers(3, bufs);
+
+    glm::vec4 color_clear(1., 1., 1., 1.);
+    glClearBufferfv(GL_COLOR, 0, glm::value_ptr(color_clear));
+
+    glm::vec4 accum_clear(0.,0.,0.,0.);
+    glClearBufferfv(GL_COLOR, 1, glm::value_ptr(accum_clear));
+
+    glm::vec4 reveal_clear(1.,0.,0.,0.);
+    glClearBufferfv(GL_COLOR, 2, glm::value_ptr(reveal_clear));
+
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    // draw the base opaque scene, write depth, use depth
+    glBlendFunci(0, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_TRUE);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
     rootNode->render(OPAQUE);
 
-    // draw blended transparent
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, semitransparent_pass_fb);
-
-    GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-
+    // draw blended transparent objects
+    // Have the base color of objects filter the colors behind them
+    glBlendFunci(0, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+    // accumulated blended lit color, blend weighting happens in shader
+    glBlendFunci(1, GL_ONE, GL_ONE);
+    // remaining transparency of blend,
+    // white stencil slowly subtracted black where opaque background becomes hid
+    glBlendFunci(2, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+    // transparent things do not occlude, so do not write to depth
     glDepthMask(GL_FALSE);
-    glm::vec4 accum_clear(0.,0.,0.,0.);
-    glClearBufferfv(GL_COLOR, 0, glm::value_ptr(accum_clear));
-    glBlendFunci(0, GL_ONE, GL_ONE);
 
-    glm::vec4 reveal_clear(1.,0.,0.,0.);
-    glClearBufferfv(GL_COLOR, 1, glm::value_ptr(reveal_clear));
-    glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
-    glBlendEquation(GL_FUNC_ADD);
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    glBlitFramebuffer(0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
-                      0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
-                      GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-    glDrawBuffers(2, bufs);
+    glDrawBuffers(3, bufs);
     rootNode->render(SEMITRANSPARENT);
 
 
     // composite transparent onto opaque
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // This just composits buffers, so depth is irrelevant
+    glDepthMask(GL_TRUE);
     glDepthFunc(GL_ALWAYS);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // use other layers as textures
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, oit_accum_tex);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, oit_reveal_tex);
+    // compose them on top of opaque color
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     compositeNode->render(OPAQUE);
+
+
+    // copy onto screen
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, semitransparent_pass_fb);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glBlitFramebuffer(0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                      0,0,DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     // add UI
 //    rootNode->render(UI);

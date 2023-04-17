@@ -21,9 +21,9 @@ layout(binding = 0) uniform sampler2D tex;
 layout(binding = 1) uniform sampler2D normal_map;
 layout(binding = 2) uniform sampler2D roughness_map;
 
-
-layout (location = 0) out vec4 accumulation;
-layout (location = 1) out float revealage;
+layout (location = 0) out vec4 modulation;
+layout (location = 1) out vec4 accumulation;
+layout (location = 2) out float revealage;
 
 float rand(vec2 co) { return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
 float dither(vec2 uv) { return (rand(uv)*2.0-1.0) / 256.0; }
@@ -150,4 +150,6 @@ void main()
     accumulation.rgb *= color.a;
     accumulation *= weight;
     revealage = color.a;
+    modulation.rgb = accumulation.a * (1 - frag_color.rgb);
+    modulation.a = color.a;
 }

@@ -13,6 +13,7 @@ uniform layout(location = 1) mat3 normal_matrix;
 uniform layout(location = 2) vec3 campos;
 uniform layout(location = 3) mat4 MVP;
 uniform layout(location = 4) mat4 model;
+uniform layout(location = 7) vec3 wind;
 uniform layout(location = 8) float fur_strand_length;
 
 layout(binding = 3) uniform sampler2D fur_texture;
@@ -37,33 +38,8 @@ void main(){
     }
 
     vec3 normals_out[3];
-    normals_out[0] = normalize(normal_matrix * normal_in[0]);
-    normals_out[1] = normalize(normal_matrix * normal_in[1]);
-    normals_out[2] = normalize(normal_matrix * normal_in[2]);
-
     vec3 tangents_out[3];
-    tangents_out[0] = normalize(normal_matrix * tangent_in[0]);
-    tangents_out[1] = normalize(normal_matrix * tangent_in[1]);
-    tangents_out[2] = normalize(normal_matrix * tangent_in[2]);
-
-    // translate tangent-space fur direction to model-space
     mat3 TBNs[3];
-    TBNs[0] = mat3(
-        tangent_in[0],
-        cross(normal_in[0], tangent_in[0]),
-        normal_in[0]
-    );
-    TBNs[1] = mat3(
-        tangent_in[1],
-        cross(normal_in[1], tangent_in[1]),
-        normal_in[1]
-    );
-    TBNs[2] = mat3(
-        tangent_in[2],
-        cross(normal_in[2], tangent_in[2]),
-        normal_in[2]
-    );
-
     vec3 fur_dirs[3];
     for(int i = 0; i < 3; ++i){
         normals_out[i] = normalize(normal_matrix * normal_in[i]);
@@ -81,12 +57,17 @@ void main(){
         fur_dirs[i] = normalize(fur_dirs[i]);
     }
 
+    // possible optimization: dynamically reduce shellcount.
+    // currently shelved because it affects blending
+    /*
     float camdist0 = length(gl_in[0].gl_Position.xyz - campos);
     float camdist1 = length(gl_in[1].gl_Position.xyz - campos);
     float camdist2 = length(gl_in[2].gl_Position.xyz - campos);
     float camdist = min(min(camdist0, camdist1), camdist2);
-    int stepsize = 1 + int(camdist/(100*fur_strand_length));
-    for(int i = 0; i < nlayers; i = i + stepsize){
+    int stepsize = 1;// + int(camdist/(100*fur_strand_length));
+    */
+
+    for(int i = 0; i < nlayers; i = ++i){
         float norm_i = float(i)/nlayers;
         float distance = fur_strand_length * norm_i;
 

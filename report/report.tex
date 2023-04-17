@@ -11,6 +11,7 @@
 \usepackage{amsfonts}
 \usepackage{ulem}
 \usepackage{blindtext}
+\usepackage{hyperref}
 
 \graphicspath{ {./images/} }
 
@@ -48,7 +49,7 @@
 \rhead{Odd-Erik Frantzen}
 \lhead{
     \raisebox{-0.33\height}{\includegraphics[height=2em]{logo}}
-    Assignment 2 TDT4230
+    Final Report TDT4230
 }
 \rfoot{Page \thepage \hspace{1pt} of~\pageref{LastPage}}
 
@@ -63,15 +64,11 @@
 \begin{document}
     \maketitle
     \section{Introduction}
-    % todo
-    Dynamic fur rendering, possibly a dog petting sim.
-    I've previously used a geometry shader,
-    along with a fur direction texture (akin to a flow map?) and a dot texture/noise texture to render static fur with the shell method.
-    I'd like to polish it up, and add features like interaction or swaying in the wind.
-    Order-independent transparency could be useful for this, to prevent self-occlusion from transparent elements rendered in the wrong order.
-    More fragment processing could also help to give the fur more accurate shading, aliasing, and self-shadowing.
-    I could also mix and match a few new techniques in, like billboards, fins, fur cards, etc, to cover more LODs, angles, and such.
-    Could subsurface-scattering help too?
+    I have chosen to work on fur rendering,
+    using a variant of NVIDIA's shells and fins method.
+    I've also implemented a form of order-independent transparency,
+    as described in the paper Weighted Blended Order-Independent Transparency.
+    I've also implemented a skybox
 
     \section{Weighted Blended Order-Independent Transparency}
 
@@ -79,29 +76,129 @@
     and therefore frequently need some form of blending to avoid jittery aliasing.
     Trying to depth sort hundreds or thousands of strands is of course, not trivial,
     so I've gone for a form of order-independent shading.
+
     Specifically, I've implemented a weighted order-independent 3-pass method,
-    where the first pass is plainly rendered opaque geometry,
-    the second pass does order-independent blending,
-    so no depth writing,
-    the blending function is just ones, fragment shader does blending weight,
-    of transparent geometry,
-    weighted by depth (and occluded by the first pass),
-    to its own framebuffer (accumulation),
-    along with a channel of "revealage", how much transparency remains for the opaque background.
-    The third pass just blends the accumulation into the main framebuffer.
-    There's technically a 4th pass after this to add UI elements.
+    where the first pass is plainly rendered opaque geometry to the main framebuffer,
+    the second pass does order-independent blending of semitransparent elements
+    to its own framebuffer,
+    and the third pass blends the transparent elements into the main framebuffer.
+    A 4th pass can be done after this to add UI elements.
 
-    This is based on the paper by Morgan McGuire and Louis Bavoil~\cite{Blending}
+    This is based on the paper by Morgan McGuire and Louis Bavoil~\cite{McGuire2013Transparency}
+
+    The semitransparency pass has three channels:
+
+    Accumulation stores the colored lit contribution to the blended product,
+    based on their alpha, and their weight (a function of their distance in clip-space).
+    It adds them to a separate accumulation buffer, with src=one, dst=one,
+    so that the final result is the sum of all fragments.
+    This means that blending happens through the in-shader weighting (alpha is multiplied into color for this).
+    The alpha channel of accumulation stores their alpha times their weight,
+    so that in the end, we can scale the accumulated color such that their alpha equals one.
+
+    The revealage channel determines how much of the opaque scene
+    to reveal through the semitransparent elements.
+    This channel therefore clears to 1, fully revealing the opaque scene by default,
+    and is then blended with src = 0, dst = 1-src,
+    such that a visible fragment
+    will lower the final revealage of the pass,
+    hiding the opaque scene more.
+    In the shader, the written value is simply the normal alpha of the object.
+
+    Finally, the modulation output filters color out of the color channel from the opaque scene.
+    This essentially lets color filters function as filters.
+    This works by outputting (1 - color), adjusted for that fragments contribution (accumulation's alpha),
+    the color being the fragment's material color, and not it's illuminated product.
+    The blending mode is set to src=zero, dst= 1 - srccolor,
+    so the modulation subtracts from the opaque scene's colors.
+
+    The accumulated color is composited onto the color buffer,
+    using the accumulation channel for color data,
+    and the revealage channel to determine the alpha of this composite layer.
+
+    Because OpenGL does not let you modify the default framebuffer,
+    this solution creates its own framebuffer,
+    and copies its final output into the default framebuffer at the end for display.
+
+    \section{Fur rendering through Shells and Fins, using geometry shaders}
+
+    Rendering individual fur strands requires an obscene amount of vertices,
+    so shortcuts and cheats are naturally needed.
+    One such cheat is the shell method,
+    where you draw individual fur strands as dots on a 2d texture,
+    on a shell around the model.
+    By progressively stacking shells outwards,
+    these dots form lines that can pass as strands of fur.
+
+    The shell method works pretty great head-on,
+    and you can imitate ambient shadows by just darkening the roots,
+    but when viewing at an angle, you are able to see between the layers,
+    which breaks the illusion.
+    This can be alleviated by having fur cards, textured rectangles,
+    that display fur strands.
+    We can elect to generate these exclusively at the silhouette,
+    to cover for the weak spot of the shell method.
+
+    This method was described in a paper from 2001~\cite{Lengyel:2001:RFO}
+    and a geometry-shader based approach was described by NVIDIA in 2007
+    ~\cite{nvidiafur,nvidiasamples}
+
+    \subsection{Shells implementation}
+
+    First, a fully opaque base is rendered,
+    in the opaque pass.
+    Then, we render the base again,
+    but with a dedicated shader program.
+    This shader program has a geometry shader,
+    that takes in triangles,
+    and generates several triangles displaced outwards.
+    The local direction and length
+    are determined by the color and alpha channels,
+    respectively, of a texture,
+    in addition to a uniform float for control of overall fur length.
+    Using textures at a vertex level does of course,
+    bottleneck the effective resolution of these textures by vertex density.
+    This combing texture is in tangent space, so a TBN table must be used.
+
+    The generated shells are then linearly spaced along this direction,
+    and the usual preparations for lighting
+    are calculated for each generated vertex.
+    Additionally,
+    thinning of hair is simulated by lowering alpha as you leave the scalp.
+    It would be possible to output the normalized coordinate
+    along this displacement as a third texture coordinate for 3d-textures.
+
+    Additionally, as proof of concept,
+    I've implemented a very basic wind displacement
+    through uniform, that maintains length,
+    but shifts fur directions somewhat along the wind.
+
+    The fragment shader uses the blending method described above,
+    uses phong lighting like most other elements in the scene,
+    but slight rudimentary self-shadowing is implemented,
+    by slightly darkening the roots and brightening the tips
+    (using the per-vertex alpha adjust to infer the shell-height).
+    Fur shells have their own normal map (blurred copy of the original,
+    to soften perceived edges),
+    and share their base's roughness map and color map.
+
+    The final alpha of a pixel of shell is determined by
+    the texture, the alpha output from the geometry shader,
+    and a turbulence/dots/fur density texture that determines which UV coordinates form strands.
+    The python file gen\_fur\_density.py generates these dots textures.
 
 
-    \section{Ref}
-    @article{Blending,
-    author = {Morgan McGuire and Louis Bavoil},
-    year = {2013},
-    title = {Weighted Blended Order-Independent Transparency},
-    publisher = {Journal of Computer Graphics Techniques (JCGT)},
-    edition = {vol. 2, no. 2}
 
-    }
+
+
+
+
+
+
+
+    \section*{Appendix}
+
+    \bibliography{refs}
+    \bibliographystyle{ieeetr}
 
 \end{document}

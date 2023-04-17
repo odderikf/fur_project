@@ -9,7 +9,7 @@ in layout(location = 0) vec3 textureCoordinates;
 
 layout(binding = 0) uniform samplerCube skybox;
 
-out vec4 color;
+layout(location = 0) out vec4 color;
 
 void main()
 {
