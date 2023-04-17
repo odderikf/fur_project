@@ -1,7 +1,7 @@
 #version 430 core
 
-#define nlayers 20
-#define nvertices 40 // 2*nlayers
+#define nlayers 10
+#define nvertices 20 // 2*nlayers
 layout(triangles) in;
 layout(triangle_strip, max_vertices = nvertices) out;
 
@@ -36,32 +36,21 @@ void main(){
     fur_texels[1] = texture(fur_texture, textureCoordinates_in[1]);
     fur_texels[2] = texture(fur_texture, textureCoordinates_in[2]);
 
-    // translate tangent-space fur direction to model-space
     mat3 TBNs[3];
-    TBNs[0] = mat3(
-    tangent_in[0],
-    cross(normal_in[0], tangent_in[0]),
-    normal_in[0]
-    );
-    TBNs[1] = mat3(
-    tangent_in[1],
-    cross(normal_in[1], tangent_in[1]),
-    normal_in[1]
-    );
-    TBNs[2] = mat3(
-    tangent_in[2],
-    cross(normal_in[2], tangent_in[2]),
-    normal_in[2]
-    );
-
     vec3 fur_dirs[3];
-    // blue: normal to surface, G: up, R: right
-    fur_dirs[0] = fur_texels[0].xyz * 2 - 1; // tangent space lookup
-    fur_dirs[0] = normalize(TBNs[0] * fur_dirs[0]); // transform to model space
-    fur_dirs[1] = fur_texels[1].xyz * 2 - 1;
-    fur_dirs[1] = normalize(TBNs[1] * fur_dirs[1]);
-    fur_dirs[2] = fur_texels[2].xyz * 2 - 1;
-    fur_dirs[2] = normalize(TBNs[2] * fur_dirs[2]);
+    for(int i = 0; i < 3; ++i){
+        // translate tangent-space fur direction to model-space
+        TBNs[i] = mat3(
+            tangent_in[i],
+            cross(normal_in[i], tangent_in[i]),
+            normal_in[i]
+        );
+        // blue: normal to surface, G: up, R: right
+        fur_dirs[i] = fur_texels[i].xyz * 2 - 1; // tangent space lookup
+        fur_dirs[i] = TBNs[i] * fur_dirs[i]; // transform to model space
+        fur_dirs[i] += normal_matrix * wind; // sway
+        fur_dirs[i] = normalize(fur_dirs[i]);
+    }
 
     vec4 left;
     vec4 right;
@@ -89,9 +78,10 @@ void main(){
 
         float camdot = dot(world_normal, to_camera_dir);
         float abscamdot = abs(camdot);
-        float silhouette_tolerance = 0.4;
+        float silhouette_tolerance = 0.6;
         if(abscamdot < silhouette_tolerance){
             float fadeout = (silhouette_tolerance-abscamdot);
+            fadeout *= fadeout;
 
             float texture_strand_length = fur_texels[ileft].a + fur_texels[iright].a;
             texture_strand_length /= 2;

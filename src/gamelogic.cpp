@@ -328,10 +328,11 @@ void initialize_game(GLFWwindow* window) {
 
     rootNode->children.push_back(sunNode);
 
-    rootNode->children.push_back(terrainNode);
-    terrainNode->children.push_back(broadTerrainNode);
     rootNode->children.push_back(padNode);
     rootNode->children.push_back(rickyFurNode);
+
+    rootNode->children.push_back(terrainNode);
+    terrainNode->children.push_back(broadTerrainNode);
 
     // transparency nodes
     rootNode->children.push_back(textNode);
@@ -606,10 +607,6 @@ void updateFrame(GLFWwindow* window) {
     fur_fin_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
 
-//    skybox_shader->activate();
-//    glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
-//    glUniform3fv(UNIFORM_BALLPOS_LOC, 1, glm::value_ptr(ballPosition));
-
 }
 
 void PointLight::update(glm::mat4 transformationThusFar) {
@@ -741,12 +738,16 @@ void FurLayer::render(render_type pass) {
             glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
 
             // draw silhouette fins
+            // these should be a little longer to match length and  stick out a little,
+            // so the texture has a little room at the top
+            float fin_strand_length_fac = 1.2;
             glDisable(GL_CULL_FACE);
             fur_fin_shader->activate();
             glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
             glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-            glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            glUniform1f(UNIFORM_FUR_LENGTH_LOC, fin_strand_length_fac*strand_length);
+
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, strandTextureID);
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
 

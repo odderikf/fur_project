@@ -65,13 +65,21 @@ void main(){
     );
 
     vec3 fur_dirs[3];
-    // blue: normal to surface, G: up, R: right
-    fur_dirs[0] = fur_texels[0].xyz * 2 - 1; // tangent space lookup
-    fur_dirs[0] = normalize(TBNs[0] * fur_dirs[0]); // transform to model space
-    fur_dirs[1] = fur_texels[1].xyz * 2 - 1;
-    fur_dirs[1] = normalize(TBNs[1] * fur_dirs[1]);
-    fur_dirs[2] = fur_texels[2].xyz * 2 - 1;
-    fur_dirs[2] = normalize(TBNs[2] * fur_dirs[2]);
+    for(int i = 0; i < 3; ++i){
+        normals_out[i] = normalize(normal_matrix * normal_in[i]);
+        tangents_out[i] = normalize(normal_matrix * tangent_in[i]);
+        // translate tangent-space fur direction to model-space
+        TBNs[i] = mat3(
+            tangent_in[i],
+            cross(normal_in[i], tangent_in[i]),
+            normal_in[i]
+        );
+        // blue: normal to surface, G: up, R: right
+        fur_dirs[i] = fur_texels[i].xyz * 2 - 1; // tangent space lookup
+        fur_dirs[i] = TBNs[i] * fur_dirs[i]; // transform to model space
+        fur_dirs[i] += normal_matrix * wind; // sway
+        fur_dirs[i] = normalize(fur_dirs[i]);
+    }
 
     float camdist0 = length(gl_in[0].gl_Position.xyz - campos);
     float camdist1 = length(gl_in[1].gl_Position.xyz - campos);
