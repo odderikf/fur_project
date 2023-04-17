@@ -24,7 +24,7 @@ int totalChildren(SceneNode* parent) {
 Geometry::Geometry(const std::string &objname) : SceneNode() {
     Mesh m("../res/models/" + objname + ".obj");
     unsigned int terrainVAO = generateBuffer(m);
-    vertexArrayObjectID = terrainVAO;
-    VAOIndexCount = m.indices.size();
+    vaoID = terrainVAO;
+    vaoIndicesSize = m.indices.size();
 
 }

@@ -25,38 +25,32 @@ double padPositionX = 0;
 double padPositionZ = 0;
 
 SceneNode* rootNode;
-FurLayer* terrainNode;
+FurredGeometry* terrainNode;
 TexturedGeometry* broadTerrainNode;
 Skybox* skyBoxNode;
-FurLayer* rickyFurNode;
+FurredGeometry* rickyFurNode;
 TexturedGeometry* padNode;
 PointLight* padLightNode;
 PointLight* topLeftLightNode;
 PointLight* topRightLightNode;
-PointLight* trio0LightNode;
-PointLight* trio1LightNode;
-PointLight* trio2LightNode;
-PointLight* whiteLightNode;
 PointLight* sunNode; // todo dirlight
 FlatGeometry* textNode;
 
 CompositorNode *compositeNode;
 GLuint semitransparent_pass_fb;
+GLuint oit_color_buffer;
 GLuint oit_accum_tex;
-GLuint oit_modulation_tex;
 GLuint oit_reveal_tex;
 GLuint oit_depth_buffer;
 
-double ballRadius = 3.0f;
-
 // These are heap allocated, because they should not be initialised at the start of the program
-Gloom::Shader* lighting_shader;
-Gloom::Shader* oit_lighting_shader;
+Gloom::Shader* opaque_lighting_shader;
+Gloom::Shader* blending_lighting_shader;
 Gloom::Shader* flat_geometry_shader;
 Gloom::Shader* fur_shell_shader;
 Gloom::Shader* fur_fin_shader;
 Gloom::Shader* skybox_shader;
-Gloom::Shader* composite_shader;
+Gloom::Shader* compositing_shader;
 
 const glm::vec3 boxDimensions(1, 1, 1);
 const glm::vec3 padDimensions(30, 3, 40);
@@ -76,47 +70,13 @@ GLint fur_shell_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN]
 GLint fur_fin_uniform_light_sources_position_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 GLint fur_fin_uniform_light_sources_color_loc[UNIFORM_POINT_LIGHT_SOURCES_LEN];
 
-unsigned int turbulenceID;
-
-bool hasStarted        = false;
-bool isPaused          = false;
-
-bool mouseLeftPressed   = false;
-bool mouseLeftReleased  = false;
-bool mouseRightPressed  = false;
-bool mouseRightReleased = false;
-
-// Modify if you want the music to start further on in the track. Measured in seconds.
 const float debug_startTime = 0;
 double realTime = debug_startTime;
-
-double mouseSensitivity = 1.0;
-double lastMouseX = DEFAULT_WINDOW_WIDTH / 2;
-double lastMouseY = DEFAULT_WINDOW_HEIGHT / 2;
 
 glm::vec3 cameraPosition = glm::vec3(0, 2, -20);
 glm::vec3 cameraRotation = glm::vec3(0, 0, 0);
 
 glm::vec3 wind = glm::vec3(0,0,0);
-
-void mouseCallback(GLFWwindow* window, double x, double y) {
-    int windowWidth, windowHeight;
-    glfwGetWindowSize(window, &windowWidth, &windowHeight);
-    glViewport(0, 0, windowWidth, windowHeight);
-
-    double deltaX = x - lastMouseX;
-    double deltaY = y - lastMouseY;
-
-    padPositionX -= mouseSensitivity * deltaX / windowWidth;
-    padPositionZ -= mouseSensitivity * deltaY / windowHeight;
-
-    if (padPositionX > 1) padPositionX = 1;
-    if (padPositionX < 0) padPositionX = 0;
-    if (padPositionZ > 1) padPositionZ = 1;
-    if (padPositionZ < 0) padPositionZ = 0;
-// todo
-//    glfwSetCursorPos(window, windowWidth / 2, windowHeight / 2);
-}
 
 GLuint create_cubemap(const std::string &foldername) {
     GLuint tex_id = 0;
@@ -155,7 +115,7 @@ TexturedGeometry::TexturedGeometry(const std::string &objname) : Geometry(objnam
     roughnessID = create_texture(filebase + "_rgh.png");
 }
 
-FurLayer::FurLayer(const std::string &objname) : TexturedGeometry(objname) {
+FurredGeometry::FurredGeometry(const std::string &objname) : TexturedGeometry(objname) {
     std::string filebase = "../res/textures/" + objname;
     furID = create_texture(filebase + "_fur.png");
     furNormalMapID = create_texture(filebase + "_fur_nrm.png");
@@ -201,13 +161,10 @@ void initialize_game(GLFWwindow* window) {
     glBindFramebuffer(GL_FRAMEBUFFER, semitransparent_pass_fb);
 
     // texture for opaque pass and color modulation
-    glGenTextures(1, &oit_modulation_tex);
-    glBindTexture(GL_TEXTURE_2D, oit_modulation_tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT,
-                 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, oit_modulation_tex, 0);
+    glGenRenderbuffers(1, &oit_color_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, oit_color_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, oit_color_buffer);
 
     // texture for blended transparency color accumulation
     glGenTextures(1, &oit_accum_tex);
@@ -237,18 +194,18 @@ void initialize_game(GLFWwindow* window) {
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, oit_depth_buffer);
 
-//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
-//    glfwSetCursorPosCallback(window, mouseCallback);
+
+    // compile shaders
 
     // general shader (phong)
-    lighting_shader = new Gloom::Shader();
-    lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/simple.frag");
-    lighting_shader->activate();
+    opaque_lighting_shader = new Gloom::Shader();
+    opaque_lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/simple.frag");
+    opaque_lighting_shader->activate();
 
     // oit pass shader (phong)
-    oit_lighting_shader = new Gloom::Shader();
-    oit_lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/oit.frag");
-    oit_lighting_shader->activate();
+    blending_lighting_shader = new Gloom::Shader();
+    blending_lighting_shader->makeBasicShader("../res/shaders/simple.vert", "../res/shaders/oit.frag");
+    blending_lighting_shader->activate();
 
     // text / UI / 2d shader
     flat_geometry_shader = new Gloom::Shader();
@@ -279,11 +236,12 @@ void initialize_game(GLFWwindow* window) {
     skybox_shader->activate();
 
     // shader that composits framebuffers to screen
-    composite_shader = new Gloom::Shader();
-    composite_shader->attach("../res/shaders/compositor.vert");
-    composite_shader->attach("../res/shaders/compositor.frag");
-    composite_shader->link();
-    composite_shader->activate();
+    compositing_shader = new Gloom::Shader();
+    compositing_shader->attach("../res/shaders/compositor.vert");
+    compositing_shader->attach("../res/shaders/compositor.frag");
+    compositing_shader->link();
+    compositing_shader->activate();
+
 
     // gen meshes
     Mesh pad = cube(padDimensions, glm::vec2(30, 40), true);
@@ -302,17 +260,13 @@ void initialize_game(GLFWwindow* window) {
     // Construct scene
     rootNode = new SceneNode();
     skyBoxNode  = new Skybox();
-    terrainNode = new FurLayer("terrain");
+    terrainNode = new FurredGeometry("terrain");
     broadTerrainNode = new TexturedGeometry("broad_terrain");
     padNode  = new TexturedGeometry();
-    rickyFurNode = new FurLayer("ricky");
+    rickyFurNode = new FurredGeometry("ricky");
     padLightNode = new PointLight();
     topLeftLightNode = new PointLight();
     topRightLightNode = new PointLight();
-    trio0LightNode = new PointLight();
-    trio1LightNode = new PointLight();
-    trio2LightNode = new PointLight();
-    whiteLightNode = new PointLight();
     sunNode = new PointLight();
     textNode = new FlatGeometry();
     compositeNode = new CompositorNode();
@@ -353,49 +307,35 @@ void initialize_game(GLFWwindow* window) {
     pch1->children.push_back(pch2);
     pch2->children.push_back(pch3);
 
-    int which_lights = 0;
-
-    // these three groups of light are mutually incompatible
-    if (which_lights == 0){
-        // three colored lights, in two corners and on the pad
-        rootNode->children.push_back(topLeftLightNode);
-        rootNode->children.push_back(topRightLightNode);
-        padNode->children.push_back(padLightNode);
-    } else if (which_lights == 1){
-        // single white light behind scene
-        rootNode->children.push_back(whiteLightNode);
-    } else {
-        // three overlapping rotating lights
-        rootNode->children.push_back(trio0LightNode);
-        rootNode->children.push_back(trio1LightNode);
-        rootNode->children.push_back(trio2LightNode);
-    }
+    // three colored lights, in what used to be the two corners and on the pad
+    rootNode->children.push_back(topLeftLightNode);
+    rootNode->children.push_back(topRightLightNode);
+    padNode->children.push_back(padLightNode);
 
     // gen meshes
 
-    skyBoxNode->vertexArrayObjectID  = boxVAO;
-    skyBoxNode->VAOIndexCount        = box.indices.size();
+    skyBoxNode->vaoID  = boxVAO;
+    skyBoxNode->vaoIndicesSize        = box.indices.size();
 
-    padNode->vertexArrayObjectID  = padVAO;
-    padNode->VAOIndexCount        = pad.indices.size();
+    padNode->vaoID  = padVAO;
+    padNode->vaoIndicesSize        = pad.indices.size();
 
-    textNode->vertexArrayObjectID = textVAO;
-    textNode->VAOIndexCount       = text_mesh.indices.size();
+    textNode->vaoID = textVAO;
+    textNode->vaoIndicesSize       = text_mesh.indices.size();
 
-    pch1->vertexArrayObjectID = pch2->vertexArrayObjectID = pch3->vertexArrayObjectID = padNode->vertexArrayObjectID;
-    pch1->VAOIndexCount = pch2->VAOIndexCount = pch3->VAOIndexCount = padNode->VAOIndexCount;
+    pch1->vaoID = pch2->vaoID = pch3->vaoID = padNode->vaoID;
+    pch1->vaoIndicesSize = pch2->vaoIndicesSize = pch3->vaoIndicesSize = padNode->vaoIndicesSize;
 
     Mesh compositeMesh;
     compositeMesh.vertices = {{-1,-1,0.5}, {1,-1,0.5}, {-1,1,0.5}, {1,1,0.5}};
     compositeMesh.indices = {0,1,2, 1,3,2};
-    compositeNode->vertexArrayObjectID = generateBuffer(compositeMesh);
-    compositeNode->VAOIndexCount = 6;
+    compositeNode->vaoID = generateBuffer(compositeMesh);
+    compositeNode->vaoIndicesSize = 6;
 
     // light positions
     topLeftLightNode->position = { -85, 30, -120};
     topRightLightNode->position = { 85, 30, -120};
     padLightNode->position = {0,5,13};
-    whiteLightNode->position = {0,20,-20};
     sunNode->position = {0, 5000, 0};
 
     // geometry positions
@@ -418,12 +358,6 @@ void initialize_game(GLFWwindow* window) {
     padLightNode->lightID = 2;
     sunNode->lightID = 3;
 
-    whiteLightNode->lightID = 0;
-
-    trio0LightNode->lightID = 0;
-    trio1LightNode->lightID = 1;
-    trio2LightNode->lightID = 2;
-
     // one red, one green, one blue. These are also intensities, not normalized.
     topLeftLightNode->lightColor = {1., 0., 0.};
     topRightLightNode->lightColor = {0., 1., 0.};
@@ -432,31 +366,23 @@ void initialize_game(GLFWwindow* window) {
     sunNode->lightColor = {1, 1, 0.5};
     sunNode->lightColor *= 2000;
 
-    whiteLightNode->lightColor = {0.9, 0.9, 0.9};
-
-    trio0LightNode->lightColor = {1., 0., 0.};
-    trio1LightNode->lightColor = {0., 1., 0.};
-    trio2LightNode->lightColor = {0., 0., 1.};
-
-
     // find uniform locations
     for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
-        uniform_light_sources_position_loc[node->lightID] = lighting_shader->getUniformFromName(poslocname);
+        uniform_light_sources_position_loc[node->lightID] = opaque_lighting_shader->getUniformFromName(poslocname);
         std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
-        uniform_light_sources_color_loc[node->lightID] = lighting_shader->getUniformFromName(collocname);
+        uniform_light_sources_color_loc[node->lightID] = opaque_lighting_shader->getUniformFromName(collocname);
     }
     for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
-        uniform_oit_light_sources_position_loc[node->lightID] = oit_lighting_shader->getUniformFromName(poslocname);
+        uniform_oit_light_sources_position_loc[node->lightID] = blending_lighting_shader->getUniformFromName(poslocname);
         std::string collocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_COLOR_NAME);
-        uniform_oit_light_sources_color_loc[node->lightID] = oit_lighting_shader->getUniformFromName(collocname);
+        uniform_oit_light_sources_color_loc[node->lightID] = blending_lighting_shader->getUniformFromName(collocname);
     }
-    // do it again for the fur shader
     for (auto node : {topLeftLightNode, topRightLightNode, padLightNode, sunNode}) {
         std::string poslocname = fmt::format("{}[{}].{}", UNIFORM_POINT_LIGHT_SOURCES_NAME, node->lightID,
                                              UNIFORM_POINT_LIGHT_SOURCES_POSITION_NAME);
@@ -484,24 +410,8 @@ void initialize_game(GLFWwindow* window) {
 }
 
 void updateFrame(GLFWwindow* window) {
-//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); todo
 
     float timeDelta = getTimeDeltaSeconds();
-
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1)) {
-        mouseLeftPressed = true;
-        mouseLeftReleased = false;
-    } else {
-        mouseLeftReleased = mouseLeftPressed;
-        mouseLeftPressed = false;
-    }
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2)) {
-        mouseRightPressed = true;
-        mouseRightReleased = false;
-    } else {
-        mouseRightReleased = mouseRightPressed;
-        mouseRightPressed = false;
-    }
 
     glm::vec3 camera_position_delta = glm::vec3(0,0,0);
     glm::vec3 camera_rotation_delta = glm::vec3(0,0,0);
@@ -552,7 +462,7 @@ void updateFrame(GLFWwindow* window) {
     realTime += timeDelta;
 
     wind = glm::vec3(
-        rand()/RAND_MAX+0.4*glm::sin((2*realTime)),
+        0.1*glm::sin((2*realTime)),
         0,
         0
     );
@@ -594,22 +504,10 @@ void updateFrame(GLFWwindow* window) {
             previous_boxPosition.z - (previous_boxDimensions.z/2) + (padDimensions.z/2) + (1 - padPositionZ) * (previous_boxDimensions.z - padDimensions.z)
     };
 
-    // overlapping lights alternate code:
-    glm::vec3 lightpos = {0, -53, -80};
-    glm::vec4 rot = {0, 1.73205081, 0, 1};
-    lightpos.z -= 4;
-    trio0LightNode->position = trio1LightNode->position = trio2LightNode->position = lightpos;
-    glm::mat4 rotlight = glm::rotate(float(realTime), glm::vec3(0,0,1));
-    trio0LightNode->position += glm::vec3(rotlight * rot);
-    rotlight = glm::rotate(float(realTime + 2*glm::pi<float>()/3.), glm::vec3(0,0,1));
-    trio1LightNode->position += glm::vec3(rotlight * rot);
-    rotlight = glm::rotate(float(realTime + 2*2*glm::pi<float>()/3.), glm::vec3(0,0,1));
-    trio2LightNode->position += glm::vec3(rotlight * rot);
-
     rootNode->update(glm::identity<glm::mat4>());
-    lighting_shader->activate();
+    opaque_lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
-    oit_lighting_shader->activate();
+    blending_lighting_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
     fur_shell_shader->activate();
     glUniform3fv(UNIFORM_CAMPOS_LOC, 1, glm::value_ptr(cameraPosition));
@@ -622,10 +520,10 @@ void PointLight::update(glm::mat4 transformationThusFar) {
     // find total position in graph by model matrix
     glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
 
-    lighting_shader->activate();
+    opaque_lighting_shader->activate();
     glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
-    oit_lighting_shader->activate();
+    blending_lighting_shader->activate();
     glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     fur_shell_shader->activate();
@@ -641,10 +539,10 @@ void DirLight::update(glm::mat4 transformationThusFar) {
     // find total position in graph by model matrix
     glm::vec4 lightpos = modelTF * glm::vec4(0, 0, 0, 1);
 
-    lighting_shader->activate();
+    opaque_lighting_shader->activate();
     glUniform3fv(uniform_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
-    oit_lighting_shader->activate();
+    blending_lighting_shader->activate();
     glUniform3fv(uniform_oit_light_sources_position_loc[lightID], 1, glm::value_ptr(lightpos));
     glUniform3fv(uniform_oit_light_sources_color_loc[lightID], 1, glm::value_ptr(lightColor));
     fur_shell_shader->activate();
@@ -673,16 +571,16 @@ void SceneNode::update(glm::mat4 transformationThusFar) {
 }
 
 void CompositorNode::render(render_type pass) {
-    if(render_pass == pass && vertexArrayObjectID != -1) {
+    if(render_pass == pass && vaoID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        composite_shader->activate();
+        compositing_shader->activate();
 
         glBindTextureUnit(ACCUMULATION_SAMPLER, oit_accum_tex);
-        glBindTextureUnit(REVEALANCE_SAMPLER, oit_reveal_tex);
+        glBindTextureUnit(REVEALAGE_SAMPLER, oit_reveal_tex);
 
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(vaoID);
+        glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
     }
 }
 
@@ -693,15 +591,15 @@ void SceneNode::render(render_type pass) {
 }
 
 void Skybox::render(render_type pass) {
-    if(render_pass == pass && vertexArrayObjectID != -1) {
+    if(render_pass == pass && vaoID != -1) {
         glm::mat4 mvp = VP; // no model
         // undo camera translation
-        mvp = glm::translate(mvp, -cameraPosition); // todo use existing matrices instead?
+        mvp = glm::translate(mvp, -cameraPosition);
         skybox_shader->activate();
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glBindTextureUnit(SKYBOX_CUBE_SAMPLER, textureID);
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(vaoID);
+        glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
         child->render(pass);
@@ -709,25 +607,25 @@ void Skybox::render(render_type pass) {
 }
 
 void Geometry::render(render_type pass) {
-    if(render_pass == pass && vertexArrayObjectID != -1) {
+    if(render_pass == pass && vaoID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        if(render_pass == SEMITRANSPARENT) oit_lighting_shader->activate();
-        else lighting_shader->activate();
+        if(render_pass == SEMITRANSPARENT) blending_lighting_shader->activate();
+        else opaque_lighting_shader->activate();
         glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 0);
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
         glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(vaoID);
+        glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
     }
     SceneNode::render(pass);
 }
 
 
-void FurLayer::render(render_type pass) {
-    if(vertexArrayObjectID != -1) {
+void FurredGeometry::render(render_type pass) {
+    if(vaoID != -1) {
         if (render_pass == pass){
             // draw shells of fur volume
             glm::mat4 mvp = VP * modelTF;
@@ -745,8 +643,8 @@ void FurLayer::render(render_type pass) {
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
             glBindTextureUnit(FUR_TURBULENCE_SAMPLER, furTurbulenceID);
 
-            glBindVertexArray(vertexArrayObjectID);
-            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            glBindVertexArray(vaoID);
+            glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
 
             // draw silhouette fins
             // these should be a little longer to match length and  stick out a little,
@@ -763,7 +661,7 @@ void FurLayer::render(render_type pass) {
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, strandTextureID);
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
 
-            glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
 
             glEnable(GL_CULL_FACE);
 
@@ -778,11 +676,11 @@ void FurLayer::render(render_type pass) {
 }
 
 void TexturedGeometry::render(render_type pass) {
-    if(render_pass == pass && vertexArrayObjectID != -1) {
+    if(render_pass == pass && vaoID != -1) {
         glm::mat4 mvp = VP * modelTF;
         glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
-        if(render_pass == SEMITRANSPARENT) oit_lighting_shader->activate();
-        else lighting_shader->activate();
+        if(render_pass == SEMITRANSPARENT) blending_lighting_shader->activate();
+        else opaque_lighting_shader->activate();
         glUniform1i(UNIFORM_ENABLE_NMAP_LOC, 1);
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
         glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
@@ -791,8 +689,8 @@ void TexturedGeometry::render(render_type pass) {
         glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
         glBindTextureUnit(SIMPLE_ROUGHNESS_SAMPLER, roughnessID);
 
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(vaoID);
+        glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
         child->render(pass);
@@ -800,15 +698,15 @@ void TexturedGeometry::render(render_type pass) {
 }
 
 void FlatGeometry::render(render_type pass) {
-    if(render_pass == pass && vertexArrayObjectID != -1) {
+    if(render_pass == pass && vaoID != -1) {
         flat_geometry_shader->activate();
         glm::mat4 ortho = glm::ortho(0.f, (float)DEFAULT_WINDOW_WIDTH, 0.f, (float)DEFAULT_WINDOW_HEIGHT, -1.f, 1.f);
         ortho = ortho * modelTF;
         glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(ortho));
 
         glBindTextureUnit(TEX_TEXT_SAMPLER, textureID);
-        glBindVertexArray(vertexArrayObjectID);
-        glDrawElements(GL_TRIANGLES, VAOIndexCount, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(vaoID);
+        glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
     }
     for(SceneNode* child : children) {
         child->render(pass);

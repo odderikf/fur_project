@@ -49,8 +49,8 @@ public:
 class Geometry : public SceneNode {
 public:
     GLuint textureID = 0;
-    int vertexArrayObjectID = -1;
-    GLsizei VAOIndexCount = 0;
+    int vaoID = -1;
+    GLsizei vaoIndicesSize = 0;
     Geometry() : SceneNode() {}
     explicit Geometry(const std::string &objname);
     void render(render_type pass) override;
@@ -71,7 +71,7 @@ public:
     void render(render_type pass) override;
 };
 
-class FurLayer : public TexturedGeometry {
+class FurredGeometry : public TexturedGeometry {
 public:
     GLuint furID = 0;
     GLuint furNormalMapID = 0;
@@ -79,8 +79,8 @@ public:
     GLuint furTurbulenceID = 0;
     float strand_length = 2.5;
     render_type render_pass = SEMITRANSPARENT;
-    FurLayer() : TexturedGeometry() {}
-    explicit FurLayer(const std::string &objname);
+    FurredGeometry() : TexturedGeometry() {}
+    explicit FurredGeometry(const std::string &objname);
     void render(render_type pass) override;
 };
 

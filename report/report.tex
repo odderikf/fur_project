@@ -68,7 +68,12 @@
     using a variant of NVIDIA's shells and fins method.
     I've also implemented a form of order-independent transparency,
     as described in the paper Weighted Blended Order-Independent Transparency.
-    I've also implemented a skybox
+    I've also implemented a skybox, I use textures and object files, I use multiple shaders,
+    and I use a custom framebuffer.
+    You can move around the scene with WASD + Shift + Space,
+    and you can turn the camera with the arrow keys.
+
+    You can find my github repo here: \url{https://github.com/odderikf/fur_project}
 
     \section{Weighted Blended Order-Independent Transparency}
 
@@ -84,7 +89,11 @@
     and the third pass blends the transparent elements into the main framebuffer.
     A 4th pass can be done after this to add UI elements.
 
-    This is based on the paper by Morgan McGuire and Louis Bavoil~\cite{McGuire2013Transparency}
+    This is based on the paper by Morgan McGuire and Louis Bavoil~\cite{McGuire2013Transparency}.
+    An article on LearnOpenGL has been somewhat useful here~\cite{learnblended},
+    as have the blog posts by one of the original authors of the paper~\cite{blendedblog1,blendedblog2,blendedblog3}.
+    The LearnOpenGL article on framebuffers was very useful~\cite{learnframebuffers},
+    as this method requires more complex framebuffer objects.
 
     The semitransparency pass has three channels:
 
@@ -143,6 +152,9 @@
     and a geometry-shader based approach was described by NVIDIA in 2007
     ~\cite{nvidiafur,nvidiasamples}
 
+    I've mainly gone by intuition on these two techniques,
+    other than that I've mainly looked at the NVIDIA paper.
+
     \subsection{Shells implementation}
 
     First, a fully opaque base is rendered,
@@ -165,8 +177,7 @@
     are calculated for each generated vertex.
     Additionally,
     thinning of hair is simulated by lowering alpha as you leave the scalp.
-    It would be possible to output the normalized coordinate
-    along this displacement as a third texture coordinate for 3d-textures.
+    So the normalized displacement as a third texture coordinate for 3d-textures.
 
     Additionally, as proof of concept,
     I've implemented a very basic wind displacement
@@ -176,27 +187,154 @@
     The fragment shader uses the blending method described above,
     uses phong lighting like most other elements in the scene,
     but slight rudimentary self-shadowing is implemented,
-    by slightly darkening the roots and brightening the tips
-    (using the per-vertex alpha adjust to infer the shell-height).
+    by slightly darkening the roots and brightening the tips.
     Fur shells have their own normal map (blurred copy of the original,
     to soften perceived edges),
     and share their base's roughness map and color map.
 
     The final alpha of a pixel of shell is determined by
-    the texture, the alpha output from the geometry shader,
+    its texture, a tip-thinning simulated by lowering alpha,
     and a turbulence/dots/fur density texture that determines which UV coordinates form strands.
     The python file gen\_fur\_density.py generates these dots textures.
 
+    \subsection{Fins implementation}
 
+    The fins are also implemented through a geometry shader.
+    The NVIDIA paper suggests using adjacency input to find edges that form silhouettes,
+    but I've opted to instead just use triangles input,
+    and test every edge.
+    This does lead to duplicates.
 
+    For every triangle, it checks every edge.
+    For each edge, if that edge's averaged vertex-normal
+    is roughly perpendicular to the view direction,
+    then generate a fur-card.
+    A wide treshold is used, so that the cards can fade instead of pop in and out.
+    These cards are also displaced along the fur direction, see the shells implementation,
+    and can be generated with multiple vertices for deformation e.g.\ for wind or interaction.
 
+    These silhouette fur-cards are rendered without back-face culling,
+    as they cull themselves within reason,
+    and this saves worrying about winding order and facing
+    The fragment shader shares most of its details with the shells shader,
+    though notably the fins do not use normal maps, roughness maps, or a dots texture.
 
+    \section{Skybox}
+    A basic skybox is set up.
+    It is drawn as the first opaque element,
+    has a box mesh,
+    uses position for UVs,
+    isn't lit,
+    and has gl\_Position set to xyww,
+    so that it is always at the maximum distance in clipspace.
+    Depth testing uses less-than-equal because of this.
+    I've used a free skybox texture named Yokohama2~\cite{yokohama2}.
+    The tutorial of cubemaps and skyboxes from LearnOpenGL was useful here~\cite{learncubemaps}
 
+    \section{Workflow, filetypes, libraries}
+    The blender directory contains a couple of blender projects.
+    They have various setup done.
+    Ricky.blend contains the mouse,
+    and has shaders set up to emulate some of the rendering techniques,
+    for more representative texture painting.
+    Ricky features a normal map baked from a displacement map, which was done in blender.
 
+    fur\_project.blend contains the grass-covered terrain, the broad terrain,
+    and an export script in python.
 
+    For object loading, I've used tinyobjloader.
+    For PNG loading, I've used the given utility file, which uses lodepng.
+    For OpenGL support, I've used GLAD, the python GLAD generator, GLFW window loader, and GLM maths library.
+    For string processing, I've used fmt, a text formatting library.
+    All of these libraries are included as git submodules, and are linked, included, and compiled through my CMakeLists file.
 
+    \section{Troubles and tribulations}
+    It took me a while to figure out a good weighting for the blending operator,
+    as the paper is somewhat cryptic,
+    and no other resources I found made things much clearer.
+    I ended up picking formula 10, which uses fragment coordinates,
+    and tweaking the results until the fur behaved.
+    You can tell that the pads become less transparent as you get far away from them,
+    I imagine there's more tweaking I can do to perfect these weights,
+    but these weights and the difficulty/impossibility of perfecting them for arbitrary scenes
+    are also a flaw of this method.
 
+    I decided to implement the color modulation/transmission blending variant described in the third blog post eventually,
+    thinking it would solve a problem I had with blending,
+    when really the main problem there was the weight function.
+    I've still gotten it roughly working, I think, but it ended up being mostly unnecessary work.
+
+    I ultimately wished to make a new animal model,
+    as ricky the rat is neither pretty nor well mapped,
+    but decided to focus on technical things instead.
+    Might make something for the presentation though.
+
+    For ages, the way I generated tangents was flawed,
+    and it took me an embarassing amount of time to even fully realize.
+    Ultimately the problem seems to have been a lack of normalization.
+
+    \newpage
     \section*{Appendix}
+
+    \subsection*{Cool JPGs}
+
+    Here's the full scene.
+    You can see intersecting,
+    overlapping, textured, normal-mapped, roughness mapped semitransparent paddles on the right,
+    showing off the blending.
+    Below the paddles is a grass/fur covered field.
+    Behind the field and hill is a skybox,
+    rendered on top of all this is a text overlay,
+    and to the left is the fur-covered rat.
+    The scene has three colored lights
+    (alas, no visual representation of their sources),
+    as well as a fourth high in the sky with very high intensity,
+    to act like the sun.
+    The sun should probably be a dirlight instead of a pointlight,
+    but I ended up never making the time for the implementation.
+
+
+    \includegraphics[width=35em]{fullscene}
+
+    Here's a closeup of the overlapping pads.
+    You can definitely see some blending artifacts with the grass here,
+    but tuning the weights to never have any of that happen is difficult.
+
+    \includegraphics[width=35em]{overlap}
+
+    Here's a view of below the grass shells,
+    so you pretty much just see the fins.
+    The ground has very big polygons, so the fins struggle to actually cover them well.
+    There could definitely be some more graceful fading in and out of fins vs shells here.
+
+    \includegraphics[width=35em]{grounded}
+
+
+    Here's a closeup of the rat,
+    you can see that the fur is fairly groomed,
+    and parts like the eyes and the nose have no fur on them, since the alpha of the fur texture is zero there.
+
+    \includegraphics[width=35em]{groomed}
+
+    As you can see here, blended things are still occluded by the opaque bases.
+
+    \includegraphics[width=35em]{depth}
+
+    Here's the scene without shells
+
+    \includegraphics[width=35em]{fins}
+
+    Here's the scene without fins
+
+    \includegraphics[width=35em]{shells}
+
+    Here's the scene with both enabled again
+
+    \includegraphics[width=35em]{both}
+
+
+
+
 
     \bibliography{refs}
     \bibliographystyle{ieeetr}
