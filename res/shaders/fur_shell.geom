@@ -14,6 +14,7 @@ uniform layout(location = 3) mat4 MVP;
 uniform layout(location = 4) mat4 model;
 uniform layout(location = 7) vec3 wind;
 uniform layout(location = 8) float fur_strand_length;
+uniform layout(location = 9) float shells;
 
 layout(binding = 3) uniform sampler2D fur_texture;
 
@@ -63,7 +64,7 @@ void main(){
     int stepsize = 1;// + int(camdist/(100*fur_strand_length));
     */
 
-    for(int i = 0; i < nlayers; i = ++i){
+    for(int i = 0; i < nlayers*shells; i = ++i){
         float norm_i = float(i)/nlayers;
         float distance = fur_strand_length * norm_i;
 

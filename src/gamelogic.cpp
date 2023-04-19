@@ -78,6 +78,13 @@ glm::vec3 cameraRotation = glm::vec3(0, 0, 0);
 
 glm::vec3 wind = glm::vec3(0,0,0);
 
+bool skybox_demo = false;
+bool fur_base_demo = false;
+bool fur_shells_demo = false;
+bool fur_fins_demo = false;
+bool fur_shells_density_demo = false;
+bool fur_shells_length_demo = false;
+
 GLuint create_cubemap(const std::string &foldername) {
     GLuint tex_id = 0;
     glGenTextures(1, &tex_id);
@@ -458,7 +465,69 @@ void updateFrame(GLFWwindow* window) {
     {
         camera_rotation_delta.x -= camera_rotation_speed * timeDelta;
     }
-
+    if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = false;
+        fur_shells_demo = false;
+        fur_fins_demo = false;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
+    {
+        skybox_demo = true;
+        fur_base_demo = false;
+        fur_shells_demo = false;
+        fur_fins_demo = false;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = true;
+        fur_shells_demo = false;
+        fur_fins_demo = false;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = false;
+        fur_shells_demo = true;
+        fur_fins_demo = false;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = false;
+        fur_shells_demo = false;
+        fur_fins_demo = true;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = false;
+        fur_shells_demo = false;
+        fur_fins_demo = false;
+        fur_shells_density_demo = true;
+        fur_shells_length_demo = false;
+    }
+    if (glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
+    {
+        skybox_demo = false;
+        fur_base_demo = false;
+        fur_shells_demo = false;
+        fur_fins_demo = false;
+        fur_shells_density_demo = false;
+        fur_shells_length_demo = true;
+    }
     realTime += timeDelta;
 
     wind = glm::vec3(
@@ -627,14 +696,27 @@ void Geometry::render(render_type pass) {
 void FurredGeometry::render(render_type pass) {
     if(vaoID != -1) {
         if (render_pass == pass){
-            // draw shells of fur volume
             glm::mat4 mvp = VP * modelTF;
             glm::mat3 normal_matrix = glm::transpose(glm::inverse(modelTF));
+
+            // draw shells of fur volume
+
             fur_shell_shader->activate();
             glUniformMatrix4fv(UNIFORM_MVP_LOC, 1, GL_FALSE, glm::value_ptr(mvp));
             glUniformMatrix4fv(UNIFORM_MODEL_LOC, 1, GL_FALSE, glm::value_ptr(modelTF));
             glUniformMatrix3fv(UNIFORM_NORMAL_MATRIX_LOC, 1, GL_FALSE, glm::value_ptr(normal_matrix));
-            glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            if(fur_shells_density_demo) {
+                float timefac = std::fmod(realTime/3,1.);
+                glUniform1f(9, timefac);
+            } else {
+                glUniform1f(9, 1.001);
+            }
+            if(fur_shells_length_demo) {
+                float timefac = std::fmod(realTime/3,2.);
+                glUniform1f(UNIFORM_FUR_LENGTH_LOC, timefac*strand_length);
+            } else {
+                glUniform1f(UNIFORM_FUR_LENGTH_LOC, strand_length);
+            }
             glUniform3fv(UNIFORM_WIND_LOC, 1, glm::value_ptr(wind));
 
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, textureID);
@@ -644,8 +726,11 @@ void FurredGeometry::render(render_type pass) {
             glBindTextureUnit(FUR_TURBULENCE_SAMPLER, furTurbulenceID);
 
             glBindVertexArray(vaoID);
-            glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
+            if(fur_fins_demo){
 
+            } else {
+                glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
+            }
             // draw silhouette fins
             // these should be a little longer to match length and  stick out a little,
             // so the texture has a little room at the top
@@ -661,8 +746,11 @@ void FurredGeometry::render(render_type pass) {
             glBindTextureUnit(SIMPLE_TEXTURE_SAMPLER, strandTextureID);
             glBindTextureUnit(FUR_FUR_SAMPLER, furID);
 
-            glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
+            if(fur_shells_demo || fur_shells_density_demo || fur_shells_length_demo){
 
+            } else {
+                glDrawElements(GL_TRIANGLES, vaoIndicesSize, GL_UNSIGNED_INT, nullptr);
+            }
             glEnable(GL_CULL_FACE);
 
         } else if (pass == OPAQUE) {
@@ -741,7 +829,12 @@ void renderFrame(GLFWwindow* window) {
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_TRUE);
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
-    rootNode->render(OPAQUE);
+    if(skybox_demo){
+        skyBoxNode->render(OPAQUE);
+    } else {
+        rootNode->render(OPAQUE);
+    }
+
 
     // draw blended transparent objects
     // Have the base color of objects filter the colors behind them
@@ -755,7 +848,11 @@ void renderFrame(GLFWwindow* window) {
     glDepthMask(GL_FALSE);
 
     glDrawBuffers(3, bufs);
-    rootNode->render(SEMITRANSPARENT);
+    if (skybox_demo || fur_base_demo){
+
+    } else {
+        rootNode->render(SEMITRANSPARENT);
+    }
 
 
     // composite transparent onto opaque
@@ -771,7 +868,11 @@ void renderFrame(GLFWwindow* window) {
     // compose them on top of opaque color
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    compositeNode->render(OPAQUE);
+    if(skybox_demo){
+
+    } else {
+        compositeNode->render(OPAQUE);
+    }
 
 
     // copy onto screen
