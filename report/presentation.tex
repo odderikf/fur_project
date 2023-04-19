@@ -50,55 +50,50 @@
             \item Blending shader for semitransparent elements
         \end{itemize}
     \end{frame}
-    \begin{frame}
-        \frametitle{Skybox}
-        \includegraphics[width=\textwidth]{skybox}
-
-        \href{https://humus.name/index.php?page=Textures&ID=138}{Yokohama2}
-        by Emil "Humus" Persson, CC-BY 3.0
-    \end{frame}
+%    \begin{frame}
+%        \frametitle{Skybox}
+%        \includegraphics[width=\textwidth]{skybox}
+%
+%        \href{https://humus.name/index.php?page=Textures&ID=138}{Yokohama2}
+%        by Emil "Humus" Persson, CC-BY 3.0
+%    \end{frame}
     \begin{frame}
         \frametitle{Skybox}
         \includegraphics[width=0.8\textwidth]{yokohama2}
 
         Cubemap texture (6 images, samplerCube) mapped onto a box around origin with radius 1
     \end{frame}
-    \begin{frame}[fragile]
-        \frametitle{Skybox}
-        TF:
-        \begin{lstlisting}[language=C++, label={lst:skyboxmvp}]
-glm::mat4 TF = VP; // no model
-mvp = glm::translate(TF, -cameraPosition);
-        \end{lstlisting}
-        Vertex shader:
-        \begin{lstlisting}[language=glsl,label={lst:skyboxvert}]
-gl_Position = TF * vec4(position, 1.0f);
-gl_Position = gl_Position.xyww;
-uv_out = origin-position;
-        \end{lstlisting}
-        Fragment Shader:
-        \begin{lstlisting}[language=glsl,label={lst:skyboxfrag}]
-color.rgba = texture(skybox, uv);
-        \end{lstlisting}
-    \end{frame}
+%    \begin{frame}[fragile]
+%        \frametitle{Skybox}
+%        TF:
+%        \begin{lstlisting}[language=C++, label={lst:skyboxmvp}]
+%glm::mat4 TF = VP; // no model
+%mvp = glm::translate(TF, -cameraPosition);
+%        \end{lstlisting}
+%        Vertex shader:
+%        \begin{lstlisting}[language=glsl,label={lst:skyboxvert}]
+%gl_Position = TF * vec4(position, 1.0f);
+%gl_Position = gl_Position.xyww;
+%uv_out = origin-position;
+%        \end{lstlisting}
+%        Fragment Shader:
+%        \begin{lstlisting}[language=glsl,label={lst:skyboxfrag}]
+%color.rgba = texture(skybox, uv);
+%        \end{lstlisting}
+%    \end{frame}
 
-    \begin{frame}
-        \frametitle{Blender objects}
-
-        Disclaimer: I am not good at blender.
-
-        Models generated through normal modeling in blender.
-
-        Basic shading set up to aid intuition
-
-        UV-generation
-
-        Texture-painting directly on model
-
-        Baked normals
-
-
-    \end{frame}
+%    \begin{frame}
+%        \frametitle{Blender objects}
+%
+%        Disclaimer: I am not good at blender.
+%
+%        Models generated through normal modeling in blender.
+%
+%        UV-generation
+%
+%        Texture-painting directly on model
+%
+%    \end{frame}
 %    \begin{frame}
 %        \frametitle{Object export}
 %        Blender can export .obj files (and many other formats)
@@ -135,40 +130,37 @@ color.rgba = texture(skybox, uv);
 %        \frametitle{Trying to preview fur}
 %        \includegraphics[width=0.8\textwidth]{ohgodshading}
 %    \end{frame}
-    \begin{frame}
-        \frametitle{Trying to preview fur ...Wasn't super helpful}
-        \includegraphics[width=0.8\textwidth]{roughricky}
-    \end{frame}
-    \begin{frame}
-        \frametitle{ UVs are annoying, huh?}
-        \includegraphics[width=0.7\textwidth]{UVs}
-    \end{frame}
-    \begin{frame}
-        \frametitle{ ...I messed up the ear area}
-        \includegraphics[width=0.7\textwidth]{overlapUVs}
-    \end{frame}
+%    \begin{frame}
+%        \frametitle{Trying to preview fur ...Wasn't super helpful}
+%        \includegraphics[width=0.8\textwidth]{roughricky}
+%    \end{frame}
+%    \begin{frame}
+%        \frametitle{ UVs are annoying, huh?}
+%        \includegraphics[width=0.7\textwidth]{UVs}
+%    \end{frame}
+%    \begin{frame}
+%        \frametitle{ ...I messed up the ear area}
+%        \includegraphics[width=0.7\textwidth]{overlapUVs}
+%    \end{frame}
 %    \begin{frame}
 %        \frametitle{ Texture painting}
 %        \includegraphics[width=\textwidth]{texturepaint}
 %    \end{frame}
-    \begin{frame}
-        \frametitle{ Texture painting}
-        \includegraphics[width=\textwidth]{texturepaint2}
-    \end{frame}
-    \begin{frame}
-        \frametitle{ displacement map baked normals }
-%        \includegraphics[width=\textwidth]{bake}
+%    \begin{frame}
+%        \frametitle{ Texture painting}
+%        \includegraphics[width=\textwidth]{texturepaint2}
 %    \end{frame}
 %    \begin{frame}
-%        \frametitle{ Result }
-        \includegraphics[width=\textwidth]{nosewhiskers}
-    \end{frame}
+%        \frametitle{ displacement map baked normals }
+%%        \includegraphics[width=\textwidth]{bake}
+%%    \end{frame}
+%%    \begin{frame}
+%%        \frametitle{ Result }
+%        \includegraphics[width=\textwidth]{nosewhiskers}
+%    \end{frame}
 
     \begin{frame}
         \frametitle{ Shell method fur generation }
-
-        Render solid base
-
         Render shells with geometry shader
 
         Triangle $\rightarrow$ several displaced copies
@@ -314,14 +306,14 @@ color.rgba = texture(skybox, uv);
             \item Render Opaque Elements (skybox, bases)
             \item Semitransparent render
             \begin{enumerate}
-                \item Occlude base color from background \\ (colored glass filtering) (optional)
-                \item Add lit color to accumulation buffer \\ (depth and alpha weighted contribution)
-                \item Add weight to accumulation buffer alpha
-                \item Lower revealage (remaining transparency) \\by original alpha
+                \item Occlude base color out of background color \\ (colored glass filtering) (optional)
+                \item Weighted sum to accumulation color buffer \\ (depth and alpha weighted contribution)
+                \item Sum of weights to weights channel
+                \item Subtract alpha from revealage channel \\ (remaining transparency)
             \end{enumerate}
             \item Composite accumulation-buffer onto image
             \begin{itemize}
-                \item divide by accumulation-alpha to scale the average
+                \item divide by sum of weights to scale the average
                 \item alpha of composite layer = 1 - revealage
             \end{itemize}
         \end{enumerate}
