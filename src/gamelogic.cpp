@@ -563,7 +563,7 @@ void updateFrame(GLFWwindow* window) {
     VP = glm::translate(VP, cameraPosition);
 
     // Move and rotate various SceneNodes
-    rickyFurNode->rotation = {0, 0.1*realTime, 0.01*realTime};
+//    rickyFurNode->rotation = {0, 0.1*realTime, 0.01*realTime};
 
     glm::vec3 previous_boxDimensions = {180, 90, 90};
     glm::vec3 previous_boxPosition = { 0, -10, -80 };;
