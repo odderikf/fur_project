@@ -20,7 +20,9 @@ I use CLion with MSVC
 Skybox Texture:
 ["Yokohama2"](https://humus.name/index.php?page=Textures&ID=138) 
 by [Emil "Humus" Persson](https://humus.name/index.php?page=About) 
-is licensed under CC BY 3.0
+is licensed under [CC BY 3.0](http://creativecommons.org/licenses/by/3.0/)
+
+["3d dog cute"](https://skfb.ly/6WMyH) by "Tech developers" is licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/).
 
 Order-Independent Transparency tutorial: [Weighted Blended](https://learnopengl.com/Guest-Articles/2020/OIT/Weighted-Blended) by Mahan Heshmati Moghaddam
 

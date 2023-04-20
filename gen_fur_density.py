@@ -20,7 +20,7 @@ def gen_texture(filename, width, height, count):
         w.write(f, img)
 
 
-gen_texture('./res/textures/ricky_fur_tur.png', 1200, 1200, 400000)
+gen_texture('./res/textures/dog_fur_tur.png', 1900, 1900, 1000000)
 gen_texture('./res/textures/terrain_fur_tur.png', 2000, 2000, 1500000)
 
 # then blur with gauss blur, stack the blur layer a bit so it's more of a local weighting than a true gauss.

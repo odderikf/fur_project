@@ -270,7 +270,7 @@ void initialize_game(GLFWwindow* window) {
     terrainNode = new FurredGeometry("terrain");
     broadTerrainNode = new TexturedGeometry("broad_terrain");
     padNode  = new TexturedGeometry();
-    rickyFurNode = new FurredGeometry("ricky");
+    rickyFurNode = new FurredGeometry("dog");
     padLightNode = new PointLight();
     topLeftLightNode = new PointLight();
     topRightLightNode = new PointLight();
@@ -356,7 +356,7 @@ void initialize_game(GLFWwindow* window) {
     broadTerrainNode->position = {0, 40, 0};
 
     terrainNode->strand_length = 15;
-    rickyFurNode->strand_length = 1;
+    rickyFurNode->strand_length = 1.;//0.7;
 
 
     // uniform array index IDs
@@ -531,9 +531,9 @@ void updateFrame(GLFWwindow* window) {
     realTime += timeDelta;
 
     wind = glm::vec3(
-        0.1*glm::sin((2*realTime)),
-        0,
-        0
+        0.1*glm::sin((1.8*realTime)) + 0.1*glm::sin((0.5*realTime)),
+        0.08*glm::sin((2.3*realTime)),
+        0.1*glm::sin((1*realTime)) + 0.08*glm::sin((0.2*realTime))
     );
 
     glm::mat4 projection = glm::perspective(
